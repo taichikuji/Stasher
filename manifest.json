@@ -1,0 +1,29 @@
+{
+  "manifest_version": 3,
+  "name": "Stasher",
+  "version": "1.0",
+  "description": "Yet Another Stash Manager by @taichikuji",
+  "homepage_url": "https://github.com/taichikuji/Stasher",
+  "permissions": [
+    "tabs",
+    "tabGroups",
+    "storage",
+    "activeTab",
+    "favicon" 
+  ],
+  "action": {
+    "default_title": "Click to Stash"
+  },
+  "background": {
+    "service_worker": "background.js"
+  },
+  "options_ui": {
+    "page": "manager.html",
+    "open_in_tab": true
+  },
+  "icons": {
+    "16": "icon.png",
+    "48": "icon.png",
+    "128": "icon.png"
+  }
+}

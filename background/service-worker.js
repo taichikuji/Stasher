@@ -7,7 +7,7 @@ chrome.action.onClicked.addListener(async (tab) => {
   // --- Helper: Open or Focus the Manager ---
   // We return the tab object so we can wait for it if needed
   const openManager = async () => {
-    const managerUrl = chrome.runtime.getURL('manager.html');
+    const managerUrl = chrome.runtime.getURL('src/manager/manager.html');
     
     // Check if manager is already open in this window
     const existingTabs = await chrome.tabs.query({ windowId: currentWindowId });
@@ -70,9 +70,9 @@ chrome.action.onClicked.addListener(async (tab) => {
     try {
       const looseTabs = await chrome.tabs.query({ windowId: currentWindowId, groupId: chrome.tabGroups.TAB_GROUP_ID_NONE });
       
-      const managerUrl = chrome.runtime.getURL('manager.html');
+      const managerUrl = chrome.runtime.getURL('src/manager/manager.html');
 
-      // FILTER: 
+      // FILTER:  
       // 1. Ignore pinned tabs
       // 2. Ignore the manager itself
       // 3. Ignore "New Tab" pages (This prevents stashing the default empty tab)

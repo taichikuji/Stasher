@@ -1,11 +1,8 @@
-// background.js
-
 chrome.action.onClicked.addListener(async (tab) => {
   const currentWindowId = tab.windowId;
   const currentGroupId = tab.groupId;
 
-  // --- Helper: Open or Focus the Manager ---
-  // We return the tab object so we can wait for it if needed
+  // Return the tab object so we can wait for it if needed
   const openManager = async () => {
     const managerUrl = chrome.runtime.getURL('src/manager/manager.html');
     
@@ -23,22 +20,19 @@ chrome.action.onClicked.addListener(async (tab) => {
     }
   };
 
-  // --- Helper: Save Data ---
   const saveToStorage = async (dataItem) => {
     const result = await chrome.storage.local.get({ stashedItems: [] });
     const newItems = [dataItem, ...result.stashedItems];
     await chrome.storage.local.set({ stashedItems: newItems });
   };
 
-  // --- LOGIC START ---
-
-  // CASE 1: Stashing a specific Group
+  // Stash a tab group
   if (currentGroupId !== chrome.tabGroups.TAB_GROUP_ID_NONE) {
     try {
       const group = await chrome.tabGroups.get(currentGroupId);
       const tabsInGroup = await chrome.tabs.query({ groupId: currentGroupId });
       
-      // FILTER: Ignore pinned tabs
+      // Ignore pinned tabs
       const unpinnedTabs = tabsInGroup.filter(t => !t.pinned);
 
       if (unpinnedTabs.length === 0) return; // Nothing to save
@@ -54,10 +48,8 @@ chrome.action.onClicked.addListener(async (tab) => {
 
       await saveToStorage(stashData);
       
-      // FIX 1: Open Manager FIRST to anchor the window
+      // Open Manager, then remove the tabs
       await openManager();
-
-      // FIX 2: Now it is safe to remove the tabs
       await chrome.tabs.remove(unpinnedTabs.map(t => t.id));
 
     } catch (error) {
@@ -65,17 +57,14 @@ chrome.action.onClicked.addListener(async (tab) => {
     }
   } 
   
-  // CASE 2: Stashing Loose Tabs (Non-Grouped)
+  // Stash non-grouped tabs
   else {
     try {
       const looseTabs = await chrome.tabs.query({ windowId: currentWindowId, groupId: chrome.tabGroups.TAB_GROUP_ID_NONE });
       
       const managerUrl = chrome.runtime.getURL('src/manager/manager.html');
 
-      // FILTER:  
-      // 1. Ignore pinned tabs
-      // 2. Ignore the manager itself
-      // 3. Ignore "New Tab" pages (This prevents stashing the default empty tab)
+      // Ignore pinned, manager tab and new tab pages
       const tabsToStash = looseTabs.filter(t => 
         !t.pinned && 
         t.url !== managerUrl &&
@@ -83,15 +72,13 @@ chrome.action.onClicked.addListener(async (tab) => {
         t.url !== 'about:blank' 
       );
 
-      // SCENARIO CHECK: If there is nothing useful to stash...
+      // If nothing can be stashed, open manager
       if (tabsToStash.length === 0) {
-        // ...just open the manager so the user can see their list!
-        // This handles the "Next Day" scenario perfectly.
         await openManager();
         return;
       }
 
-      // If we DO have tabs to stash:
+      // If there's something to stash, proceed
       const stashData = {
         id: Date.now(),
         timestamp: new Date().toLocaleString(),
@@ -100,13 +87,12 @@ chrome.action.onClicked.addListener(async (tab) => {
         color: "grey",
         tabs: tabsToStash.map(t => ({ title: t.title, url: t.url, favIconUrl: t.favIconUrl }))
       };
-
+      
+      // Save to storage
       await saveToStorage(stashData);
       
-      // FIX 1: Open Manager FIRST to anchor the window
+      // Open Manager, then remove the tabs
       await openManager();
-      
-      // FIX 2: Now safe to remove the tabs
       await chrome.tabs.remove(tabsToStash.map(t => t.id));
 
     } catch (error) {

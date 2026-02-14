@@ -1,0 +1,25 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8"> 
+  <title>TaichiTabs Stash Manager</title>
+  <link rel="stylesheet" type="text/css" href="manager.css">
+</head>
+<body>
+
+  <div class="header">
+    <h1><img src="icon.png" alt="TaichiTabs Icon" class="header-icon"> TaichiTabs Stash</h1>
+    <div class="controls">
+      <button id="exportBtn">Export JSON</button>
+      <input type="file" id="importFile" accept=".json" style="display:none">
+      <button id="importBtn">Import JSON</button>
+      <button id="deleteAllBtn" class="danger">Delete All Stashes</button>
+    </div>
+  </div>
+
+  <div id="stash-container">
+    </div>
+
+  <script src="manager.js"></script>
+</body>
+</html>

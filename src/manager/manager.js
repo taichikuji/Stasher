@@ -1,9 +1,7 @@
 // Initial Load
 document.addEventListener('DOMContentLoaded', loadStashes);
 
-// REAL-TIME UPDATE LISTENER
-// This listens for changes in chrome.storage.local. 
-// If 'stashedItems' changes (because you clicked the extension icon), we reload the list.
+// This listens for changes in chrome.storage.local. If changes are detected, reload manager
 chrome.storage.onChanged.addListener((changes, namespace) => {
   if (namespace === 'local' && changes.stashedItems) {
     loadStashes();
@@ -12,7 +10,6 @@ chrome.storage.onChanged.addListener((changes, namespace) => {
 
 const CHROME_COLORS = ['grey', 'blue', 'red', 'yellow', 'green', 'pink', 'purple', 'cyan', 'orange'];
 
-// --- 1. Load and Render Data ---
 async function loadStashes() {
   const result = await chrome.storage.local.get({ stashedItems: [] });
   const container = document.getElementById('stash-container');
@@ -27,7 +24,6 @@ async function loadStashes() {
     const card = document.createElement('div');
     card.className = 'stash-card';
     
-    // --- HEADER CREATION ---
     const header = document.createElement('div');
     header.className = 'card-header';
     header.id = `header-${item.id}`; // Give ID for easier swapping
@@ -37,7 +33,6 @@ async function loadStashes() {
 
     card.appendChild(header);
 
-    // --- LIST CREATION ---
     const ul = document.createElement('ul');
     ul.className = 'link-list';
 
@@ -70,7 +65,6 @@ async function loadStashes() {
   });
 }
 
-// --- Helper: Render View Mode (Standard Display) ---
 function renderViewMode(container, item) {
   container.innerHTML = ''; // Clear current content
 
@@ -105,7 +99,7 @@ function renderViewMode(container, item) {
   btnDelete.className = 'danger';
   btnDelete.onclick = () => deleteStash(item.id);
 
-  // Assemble
+  // Construct
   container.appendChild(badge);
   container.appendChild(editBtn);
   container.appendChild(meta);
@@ -114,7 +108,6 @@ function renderViewMode(container, item) {
   container.appendChild(actions);
 }
 
-// --- Helper: Render Edit Mode (Input + Colors) ---
 function renderEditMode(container, item) {
   container.innerHTML = ''; // Clear view mode
 
@@ -145,7 +138,7 @@ function renderEditMode(container, item) {
     colorPicker.appendChild(dot);
   });
 
-  // 3. Save Button (Checkmark)
+  // 3. Save Button
   const saveBtn = document.createElement('button');
   saveBtn.className = 'icon-btn save-btn';
   saveBtn.innerHTML = '&#10004;';
@@ -153,7 +146,7 @@ function renderEditMode(container, item) {
     await updateStashData(item.id, input.value, selectedColor);
   };
 
-  // 4. Cancel Button (X)
+  // 4. Cancel Button
   const cancelBtn = document.createElement('button');
   cancelBtn.className = 'icon-btn cancel-btn';
   cancelBtn.innerHTML = '&#10006;';
@@ -171,7 +164,6 @@ function renderEditMode(container, item) {
   container.appendChild(wrapper);
 }
 
-// --- Helper: Save Changes to Storage ---
 async function updateStashData(id, newTitle, newColor) {
   const result = await chrome.storage.local.get({ stashedItems: [] });
   const index = result.stashedItems.findIndex(i => i.id === id);
@@ -186,7 +178,6 @@ async function updateStashData(id, newTitle, newColor) {
   }
 }
 
-// --- 2. Restore Functionality (The "Stealth Mode" Fix) ---
 async function restoreGroup(item) {
   let tempWindow = null; // We declare this outside to ensure we can close it later
   
@@ -210,10 +201,11 @@ async function restoreGroup(item) {
         collapsed: false
       });
 
-      // ---------------------------------------------------------------------
-      // THE FIX: "Stealth Hop"
-      // We create the helper window MINIMIZED and UNFOCUSED.
-      // ---------------------------------------------------------------------
+      // The whole reason for the creation of this extension is due to Chromium browsers recently
+      // Unable to properly render tab groups, titles and colors until clicked while using other
+      // Tab managers, such as OneTab. As such, we had to come up with a workaround.
+
+      // It's dirty. But works.
       
       // A. Create a minimized helper window in the background
       tempWindow = await chrome.windows.create({ 
@@ -244,18 +236,16 @@ async function restoreGroup(item) {
     console.error("Error restoring group:", error);
     // If something breaks, we don't alert the user, we just log it.
   } finally {
-    // 6. SAFETY: Always close the temp window, even if errors occurred
+    // 6. Always close the temp window, even if errors occurred
     if (tempWindow) {
       await chrome.windows.remove(tempWindow.id);
     }
   }
 }
 
-// --- GLOBAL VARIABLES FOR UNDO ---
 let lastDeletedItem = null;
 let undoTimeout = null;
 
-// --- 3. Delete Functionality (With Undo Toast) ---
 async function deleteStash(id) {
   // 1. Get current list to find the item we are about to delete
   const result = await chrome.storage.local.get({ stashedItems: [] });
@@ -269,15 +259,11 @@ async function deleteStash(id) {
   // 3. Remove it from storage immediately
   const newItems = result.stashedItems.filter(i => i.id !== id);
   await chrome.storage.local.set({ stashedItems: newItems });
-  
-  // 4. Trigger UI Refresh
-  // (We don't need to call loadStashes() manually because our storage.onChanged listener does it)
 
-  // 5. Show the Undo Toast
+  // 4. Show the Undo Toast
   showUndoToast();
 }
 
-// --- Undo Logic ---
 function showUndoToast() {
   const toast = document.getElementById('undo-toast');
   const msg = document.getElementById('undo-msg');
@@ -323,7 +309,6 @@ document.getElementById('close-toast').onclick = () => {
   clearTimeout(undoTimeout);
 };
 
-// --- 4. Delete All (Keep Confirmation for Safety) ---
 // We keep the prompt here because undoing a massive wipe is messy/risky
 document.getElementById('deleteAllBtn').onclick = async () => {
   if (confirm("WARNING: This will delete ALL saved tabs and groups.\n\nAre you sure you want to proceed?")) {

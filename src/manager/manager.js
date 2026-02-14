@@ -1,6 +1,7 @@
 // Constants and Configuration
 const CONFIG = {
   STORAGE_KEY: 'stashedItems',
+  THEME_KEY: 'themePreference',
   CHROME_COLORS: ['grey', 'blue', 'red', 'yellow', 'green', 'pink', 'purple', 'cyan', 'orange']
 };
 
@@ -18,13 +19,17 @@ const elements = {
   undoBtn: document.getElementById('undo-btn'),
   closeToastBtn: document.getElementById('close-toast'),
   deleteAllBtn: document.getElementById('deleteAllBtn'),
+  themeToggleBtn: document.getElementById('themeToggleBtn'),
   exportBtn: document.getElementById('exportBtn'),
   importBtn: document.getElementById('importBtn'),
   importFile: document.getElementById('importFile')
 };
 
 // Initial Load
-document.addEventListener('DOMContentLoaded', loadStashes);
+document.addEventListener('DOMContentLoaded', () => {
+  loadStashes();
+  initTheme();
+});
 
 // Listen for changes in chrome.storage.local to update UI
 chrome.storage.onChanged.addListener((changes, namespace) => {
@@ -435,7 +440,35 @@ function setupEventListeners() {
 
   // Global Actions
   elements.deleteAllBtn.onclick = handleDeleteAll;
+  elements.themeToggleBtn.onclick = toggleTheme;
   elements.exportBtn.onclick = handleExport;
   elements.importBtn.onclick = () => elements.importFile.click();
   elements.importFile.onchange = handleImport;
+}
+// Theme Management
+function initTheme() {
+  const savedTheme = localStorage.getItem(CONFIG.THEME_KEY);
+  // Default to light (which is null or 'light')
+  if (savedTheme === 'dark') {
+    applyTheme('dark');
+  } else {
+    applyTheme('light');
+  }
+}
+
+function toggleTheme() {
+  const currentTheme = document.documentElement.getAttribute('data-theme') || 'light';
+  const newTheme = currentTheme === 'dark' ? 'light' : 'dark';
+  applyTheme(newTheme);
+  localStorage.setItem(CONFIG.THEME_KEY, newTheme);
+}
+
+function applyTheme(theme) {
+  if (theme === 'dark') {
+    document.documentElement.setAttribute('data-theme', 'dark');
+    elements.themeToggleBtn.textContent = '🐈';
+  } else {
+    document.documentElement.removeAttribute('data-theme');
+    elements.themeToggleBtn.textContent = '🐈‍⬛';
+  }
 }

@@ -1,9 +1,114 @@
+:root {
+  /* Light Theme (User's White Theme) */
+  --rosewater: #dc8a78;
+  --flamingo: #dd7878;
+  --pink: #ea76cb;
+  --mauve: #8839ef;
+  --red: #d20f39;
+  --maroon: #e64553;
+  --peach: #fe640b;
+  --yellow: #df8e1d;
+  --green: #40a02b;
+  --teal: #179299;
+  --sky: #04a5e5;
+  --sapphire: #209fb5;
+  --blue: #1e66f5;
+  --lavender: #7287fd;
+  --text: #4c4f69;
+  --subtext1: #5c5f77;
+  --subtext0: #6c6f85;
+  --overlay2: #7c7f93;
+  --overlay1: #8c8fa1;
+  --overlay0: #9ca0b0;
+  --surface2: #acb0be;
+  --surface1: #bcc0cc;
+  --surface0: #ccd0da;
+  --base: #eff1f5;
+  --mantle: #e6e9ef;
+  --crust: #dce0e8;
+
+  --bg-body: var(--base);
+  --bg-card: #ffffff;
+  --text-main: var(--text);
+  --text-muted: var(--subtext0);
+  --border-color: var(--surface0);
+  --input-bg: #ffffff;
+  --input-border: var(--overlay0);
+  --shadow-color: rgba(0,0,0,0.1);
+  --btn-primary: var(--blue);
+  --btn-primary-hover: var(--sapphire);
+  --btn-text: #ffffff;
+  --btn-danger: var(--red);
+  --btn-danger-hover: var(--maroon);
+  --btn-secondary: var(--surface0);
+  --btn-secondary-hover: var(--surface1);
+  --btn-secondary-text: var(--text);
+  --link-color: var(--text);
+  --link-hover: var(--blue);
+  --icon-color: var(--text);
+  --toast-bg: var(--text);
+  --toast-text: var(--base);
+}
+
+[data-theme="dark"] {
+  /* Dark Theme (User's Dark Mode) */
+  --rosewater: #f5e0dc;
+  --flamingo: #f2cdcd;
+  --pink: #f5c2e7;
+  --mauve: #cba6f7;
+  --red: #f38ba8;
+  --maroon: #eba0ac;
+  --peach: #fab387;
+  --yellow: #f9e2af;
+  --green: #a6e3a1;
+  --teal: #94e2d5;
+  --sky: #89dceb;
+  --sapphire: #74c7ec;
+  --blue: #89b4fa;
+  --lavender: #b4befe;
+  --text: #cdd6f4;
+  --subtext1: #bac2de;
+  --subtext0: #a6adc8;
+  --overlay2: #9399b2;
+  --overlay1: #7f849c;
+  --overlay0: #6c7086;
+  --surface2: #585b70;
+  --surface1: #45475a;
+  --surface0: #313244;
+  --base: #1e1e2e;
+  --mantle: #181825;
+  --crust: #11111b;
+
+  --bg-body: var(--base);
+  --bg-card: var(--mantle);
+  --text-main: var(--text);
+  --text-muted: var(--subtext0);
+  --border-color: var(--surface0);
+  --input-bg: var(--base);
+  --input-border: var(--surface1);
+  --shadow-color: rgba(0,0,0,0.3);
+  --btn-primary: var(--blue);
+  --btn-primary-hover: var(--sapphire);
+  --btn-text: var(--base);
+  --btn-danger: var(--red);
+  --btn-danger-hover: var(--maroon);
+  --btn-secondary: var(--surface0);
+  --btn-secondary-hover: var(--surface1);
+  --btn-secondary-text: var(--text);
+  --link-color: var(--text);
+  --link-hover: var(--blue);
+  --icon-color: var(--text);
+  --toast-bg: var(--surface0);
+  --toast-text: var(--text);
+}
+
 body {
   font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-  background-color: #f1f3f4;
+  background-color: var(--bg-body);
   margin: 0;
   padding: 20px;
-  color: #333;
+  color: var(--text-main);
+  transition: background-color 0.3s, color 0.3s;
 }
 
 .header {
@@ -11,10 +116,11 @@ body {
   justify-content: space-between;
   align-items: center;
   margin-bottom: 20px;
-  background: white;
+  background: var(--bg-card);
   padding: 15px 20px;
   border-radius: 8px;
-  box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+  box-shadow: 0 1px 3px var(--shadow-color);
+  transition: background-color 0.3s, box-shadow 0.3s;
 }
 
 .header-icon {
@@ -29,25 +135,39 @@ button {
   padding: 8px 16px;
   border: none;
   border-radius: 4px;
-  background-color: #1a73e8;
-  color: white;
+  background-color: var(--btn-primary);
+  color: var(--btn-text);
   font-weight: 500;
   margin-left: 10px;
+  transition: background-color 0.2s;
 }
 
-button:hover { background-color: #1557b0; }
-button.danger { background-color: #d93025; }
-button.danger:hover { background-color: #b31412; }
-button.secondary { background-color: #e8f0fe; color: #1a73e8; }
-button.secondary:hover { background-color: #d2e3fc; }
+button:hover { background-color: var(--btn-primary-hover); }
+button.danger { background-color: var(--btn-danger); }
+button.danger:hover { background-color: var(--btn-danger-hover); }
+button.secondary { background-color: var(--btn-secondary); color: var(--btn-secondary-text); }
+button.secondary:hover { background-color: var(--btn-secondary-hover); }
+
+/* Theme Toggle Button specific styles if needed */
+#themeToggleBtn {
+  background-color: transparent;
+  padding: 8px;
+  font-size: 20px;
+  line-height: 1;
+}
+#themeToggleBtn:hover {
+  background-color: var(--surface1);
+  transform: scale(1.1);
+}
 
 .stash-card {
-  background: white;
+  background: var(--bg-card);
   border-radius: 8px;
   padding: 0;
   margin-bottom: 20px;
-  box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+  box-shadow: 0 1px 3px var(--shadow-color);
   overflow: hidden;
+  transition: background-color 0.3s;
 }
 
 .card-header {
@@ -55,7 +175,7 @@ button.secondary:hover { background-color: #d2e3fc; }
   display: flex;
   justify-content: space-between;
   align-items: center;
-  border-bottom: 1px solid #eee;
+  border-bottom: 1px solid var(--border-color);
 }
 
 .group-badge {
@@ -65,11 +185,11 @@ button.secondary:hover { background-color: #d2e3fc; }
   border-radius: 16px;
   font-weight: bold;
   font-size: 14px;
-  color: #3c4043;
+  color: var(--text); /* Was #3c4043 */
   border: 1px solid transparent;
 }
 
-/* Chrome Tab Group Colors */
+/* Chrome Tab Group Colors - Keeping these as they are semantic, but could map to theme colors if desired */
 .color-grey { background-color: #dadce0; }
 .color-blue { background-color: #8ab4f8; }
 .color-red { background-color: #f28b82; }
@@ -79,6 +199,10 @@ button.secondary:hover { background-color: #d2e3fc; }
 .color-purple { background-color: #c58af9; }
 .color-cyan { background-color: #78d9ec; }
 .color-orange { background-color: #fcad70; }
+/* In dark mode these might be too bright on dark cards. 
+   Ideally we should use variables for these too, but I'll leave them for now to avoid breaking the "Chrome group color" reliability. 
+   Maybe slightly adjust text color on them? 
+*/
 
 .card-actions button {
   font-size: 12px;
@@ -87,7 +211,7 @@ button.secondary:hover { background-color: #d2e3fc; }
 
 .meta-info {
   font-size: 12px;
-  color: #5f6368;
+  color: var(--text-muted);
   margin-right: 15px;
 }
 
@@ -101,7 +225,7 @@ button.secondary:hover { background-color: #d2e3fc; }
   display: flex;
   align-items: center;
   padding: 6px 0;
-  border-bottom: 1px solid #f1f1f1;
+  border-bottom: 1px solid var(--border-color);
 }
 
 .link-item:last-child { border-bottom: none; }
@@ -114,24 +238,22 @@ button.secondary:hover { background-color: #d2e3fc; }
 
 .link-item a {
   text-decoration: none;
-  color: #333;
+  color: var(--link-color);
   flex-grow: 1;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 
-.link-item a:hover { color: #1a73e8; }
+.link-item a:hover { color: var(--link-hover); }
 
 .open-one-btn {
   background: none;
-  color: #1a73e8;
+  color: var(--blue);
   padding: 2px 8px;
   font-size: 12px;
 }
-.open-one-btn:hover { background: #e8f0fe; }
-
-/* --- Edit Mode Styles --- */
+.open-one-btn:hover { background: var(--surface1); color: var(--text); }
 
 .edit-container {
   display: flex;
@@ -143,10 +265,12 @@ button.secondary:hover { background-color: #d2e3fc; }
 .edit-input {
   font-size: 14px;
   padding: 6px 10px;
-  border: 1px solid #ccc;
+  border: 1px solid var(--input-border);
   border-radius: 4px;
-  flex-grow: 1; /* Take up available space */
+  flex-grow: 1;
   font-family: inherit;
+  background-color: var(--input-bg);
+  color: var(--text-main);
 }
 
 .color-picker {
@@ -165,7 +289,7 @@ button.secondary:hover { background-color: #d2e3fc; }
 
 .color-dot:hover { opacity: 1; transform: scale(1.1); }
 .color-dot.selected { 
-  border-color: #333; 
+  border-color: var(--text-main); 
   opacity: 1; 
   transform: scale(1.1);
 }
@@ -177,28 +301,27 @@ button.secondary:hover { background-color: #d2e3fc; }
   cursor: pointer;
   font-size: 16px;
   padding: 4px;
-  color: #5f6368;
+  color: var(--icon-color);
   margin-left: 5px;
 }
-.icon-btn:hover { color: #1a73e8; background-color: #f1f3f4; border-radius: 50%; }
+.icon-btn:hover { color: var(--blue); background-color: var(--surface1); border-radius: 50%; }
 
-.save-btn { color: #1e8e3e; }
-.cancel-btn { color: #d93025; }
+.save-btn { color: var(--green); }
+.cancel-btn { color: var(--red); }
 
-/* --- Undo Toast Notification --- */
 .undo-toast {
   position: fixed;
   bottom: 20px;
   left: 50%;
   transform: translateX(-50%);
-  background-color: #323232;
-  color: white;
+  background-color: var(--toast-bg);
+  color: var(--toast-text);
   padding: 12px 24px;
   border-radius: 4px;
   display: flex;
   align-items: center;
   gap: 15px;
-  box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+  box-shadow: 0 4px 12px var(--shadow-color);
   z-index: 1000;
   min-width: 300px;
   justify-content: space-between;
@@ -210,14 +333,14 @@ button.secondary:hover { background-color: #d2e3fc; }
 .undo-toast.hidden {
   opacity: 0;
   pointer-events: none;
-  transform: translate(-50%, 20px); /* Slide down when hidden */
+  transform: translate(-50%, 20px);
 }
 
 /* Undo Button */
 #undo-btn {
   background: none;
   border: none;
-  color: #8ab4f8; /* Google Blue */
+  color: var(--blue); /* Was #8ab4f8 google blue */
   font-weight: bold;
   cursor: pointer;
   padding: 4px 8px;
@@ -228,7 +351,7 @@ button.secondary:hover { background-color: #d2e3fc; }
 
 /* Close X */
 #close-toast {
-  color: #9aa0a6;
+  color: var(--subtext0);
   font-size: 14px;
 }
-#close-toast:hover { color: white; background: none; }
+#close-toast:hover { color: var(--text-main); background: none; }

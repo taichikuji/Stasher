@@ -251,19 +251,84 @@ async function restoreGroup(item) {
   }
 }
 
-// --- 3. Delete Functionality ---
+// --- GLOBAL VARIABLES FOR UNDO ---
+let lastDeletedItem = null;
+let undoTimeout = null;
+
+// --- 3. Delete Functionality (With Undo Toast) ---
 async function deleteStash(id) {
+  // 1. Get current list to find the item we are about to delete
   const result = await chrome.storage.local.get({ stashedItems: [] });
-  const newItems = result.stashedItems.filter(item => item.id !== id);
+  const itemIndex = result.stashedItems.findIndex(i => i.id === id);
+  
+  if (itemIndex === -1) return; // Item not found
+
+  // 2. Save it to memory (The Safety Net)
+  lastDeletedItem = result.stashedItems[itemIndex];
+
+  // 3. Remove it from storage immediately
+  const newItems = result.stashedItems.filter(i => i.id !== id);
   await chrome.storage.local.set({ stashedItems: newItems });
-  loadStashes();
+  
+  // 4. Trigger UI Refresh
+  // (We don't need to call loadStashes() manually because our storage.onChanged listener does it)
+
+  // 5. Show the Undo Toast
+  showUndoToast();
 }
 
-// --- 4. Export / Import ---
+// --- Undo Logic ---
+function showUndoToast() {
+  const toast = document.getElementById('undo-toast');
+  const msg = document.getElementById('undo-msg');
+  
+  // Update text based on what we deleted
+  const name = lastDeletedItem.title || "Group";
+  msg.textContent = `Deleted "${name.substring(0, 20)}${name.length>20?'...':''}"`;
+
+  // Clear previous timer if one exists (user is deleting fast)
+  if (undoTimeout) clearTimeout(undoTimeout);
+
+  // Show the toast
+  toast.classList.remove('hidden');
+
+  // Auto-hide after 5 seconds
+  undoTimeout = setTimeout(() => {
+    toast.classList.add('hidden');
+    lastDeletedItem = null; // Clear memory, it's gone forever now
+  }, 5000);
+}
+
+// Event Listeners for Toast
+document.getElementById('undo-btn').onclick = async () => {
+  if (!lastDeletedItem) return;
+
+  // 1. Get current list
+  const result = await chrome.storage.local.get({ stashedItems: [] });
+  
+  // 2. Add the item back to the TOP of the list
+  const newItems = [lastDeletedItem, ...result.stashedItems];
+  
+  // 3. Save
+  await chrome.storage.local.set({ stashedItems: newItems });
+
+  // 4. Hide toast
+  document.getElementById('undo-toast').classList.add('hidden');
+  clearTimeout(undoTimeout);
+  lastDeletedItem = null;
+};
+
+document.getElementById('close-toast').onclick = () => {
+  document.getElementById('undo-toast').classList.add('hidden');
+  clearTimeout(undoTimeout);
+};
+
+// --- 4. Delete All (Keep Confirmation for Safety) ---
+// We keep the prompt here because undoing a massive wipe is messy/risky
 document.getElementById('deleteAllBtn').onclick = async () => {
-  if(confirm("Are you sure you want to delete ALL history?")) {
+  if (confirm("WARNING: This will delete ALL saved tabs and groups.\n\nAre you sure you want to proceed?")) {
     await chrome.storage.local.clear();
-    loadStashes();
+    // loadStashes handled by listener
   }
 };
 

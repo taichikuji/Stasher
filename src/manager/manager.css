@@ -184,3 +184,51 @@ button.secondary:hover { background-color: #d2e3fc; }
 
 .save-btn { color: #1e8e3e; }
 .cancel-btn { color: #d93025; }
+
+/* --- Undo Toast Notification --- */
+.undo-toast {
+  position: fixed;
+  bottom: 20px;
+  left: 50%;
+  transform: translateX(-50%);
+  background-color: #323232;
+  color: white;
+  padding: 12px 24px;
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  gap: 15px;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+  z-index: 1000;
+  min-width: 300px;
+  justify-content: space-between;
+  font-size: 14px;
+  transition: opacity 0.3s, transform 0.3s;
+}
+
+/* Hide/Show states */
+.undo-toast.hidden {
+  opacity: 0;
+  pointer-events: none;
+  transform: translate(-50%, 20px); /* Slide down when hidden */
+}
+
+/* Undo Button */
+#undo-btn {
+  background: none;
+  border: none;
+  color: #8ab4f8; /* Google Blue */
+  font-weight: bold;
+  cursor: pointer;
+  padding: 4px 8px;
+  margin: 0;
+  text-transform: uppercase;
+}
+#undo-btn:hover { background-color: rgba(255,255,255,0.1); border-radius: 4px; }
+
+/* Close X */
+#close-toast {
+  color: #9aa0a6;
+  font-size: 14px;
+}
+#close-toast:hover { color: white; background: none; }

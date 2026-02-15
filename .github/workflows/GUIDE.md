@@ -1,20 +1,21 @@
-# How to trigger the Release Workflow
+# Triggering a New Release
 
-To trigger the `release.yml` workflow and generate a new extension package, follow these steps:
+To build and release a new version of the extension, follow these steps:
 
-1. **Commit the workflow** (if not already done):
-   ```bash
-   git add .github/workflows/release.yml
-   git commit -m "Add release workflow"
-   git push
-   ```
+### 1. Tag the Release
+Create a new version tag. The workflow is configured to detect any tag starting with `v`.
+```bash
+# Example: Create version 1.2.0
+git tag v1.2.0
+git push origin v1.2.0
+```
 
-2. **Create a new version tag**:
-   The workflow triggers on tags starting with `v` (e.g., `v1.0.0`).
-   ```bash
-   git tag v1.0.0
-   git push origin v1.0.0
-   ```
+### 2. Monitor the Build
+Visit the [Actions](https://github.com/taichikuji/Stasher/actions) tab in the repository. The workflow will:
+- Parse the version number.
+- Package the extension into a `.zip` archive.
+- Upload a copy as a workflow artifact.
 
-3. **Verify the release**:
-   Go to your repository on GitHub under the **"Releases"** section. You should see a new release with the version name containing the `Stasher_1.0.0.chromium.zip` file.
+### 3. Verification
+Once complete, the zipped extension will be automatically attached as an asset to a new GitHub Release here:
+[https://github.com/taichikuji/Stasher/releases](https://github.com/taichikuji/Stasher/releases)

@@ -1,0 +1,46 @@
+name: Stasher Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: Build & Release Extension
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Get version from tag
+        id: get_version
+        shell: bash
+        run: |
+          # Extracts '1.2.3' from 'refs/tags/v1.2.3'
+          TAG_NAME=${GITHUB_REF#refs/tags/}
+          # Strip 'v' prefix if present
+          VERSION=${TAG_NAME#v}
+          echo "VERSION=$VERSION" >> $GITHUB_ENV
+
+      - name: Build Chromium Package
+        run: |
+          # Create a zip file excluding git folders and README
+          # This mimics uBlock's 'tools/make-chromium.sh' step but for a source-only extension
+          zip -r "Stasher_${{ env.VERSION }}.chromium.zip" . -x "*.git*" ".github/*" "README.md"
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        if: startsWith(github.ref, 'refs/tags/')
+        with:
+          name: ${{ env.VERSION }}
+          # Uploads the zip file as a release asset
+          files: Stasher_${{ env.VERSION }}.chromium.zip
+          # Automatically generates release notes
+          generate_release_notes: true
+          draft: false
+          prerelease: false

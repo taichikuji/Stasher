@@ -190,19 +190,15 @@ button.secondary:hover { background-color: var(--btn-secondary-hover); }
 }
 
 /* Chrome Tab Group Colors - Keeping these as they are semantic, but could map to theme colors if desired */
-.color-grey { border: 2.5px solid #dadce0; }
-.color-blue { border: 2.5px solid #8ab4f8; }
-.color-red { border: 2.5px solid #f28b82; }
-.color-yellow { border: 2.5px solid #fdd663; }
-.color-green { border: 2.5px solid #81c995; }
-.color-pink { border: 2.5px solid #ff8bcb; }
-.color-purple { border: 2.5px solid #c58af9; }
-.color-cyan { border: 2.5px solid #78d9ec; }
-.color-orange { border: 2.5px solid #fcad70; }
-/* In dark mode these might be too bright on dark cards. 
-   Ideally we should use variables for these too, but I'll leave them for now to avoid breaking the "Chrome group color" reliability. 
-   Maybe slightly adjust text color on them? 
-*/
+.color-grey   { background-color: #dadce0; color: #202124; } /* Grey 900 text */
+.color-blue   { background-color: #8ab4f8; color: #174ea6; } /* Blue 900 text */
+.color-red    { background-color: #f28b82; color: #a50e0e; } /* Red 900 text */
+.color-yellow { background-color: #fdd663; color: #e37400; } /* Yellow 900 text */
+.color-green  { background-color: #81c995; color: #0d652d; } /* Green 900 text */
+.color-pink   { background-color: #ff8bcb; color: #b80672; } /* Pink 900 text */
+.color-purple { background-color: #c58af9; color: #681da8; } /* Purple 900 text */
+.color-cyan   { background-color: #78d9ec; color: #007b83; } /* Cyan 900 text */
+.color-orange { background-color: #fcad70; color: #b06000; } /* Orange 900 text */
 
 .card-actions button {
   font-size: 12px;

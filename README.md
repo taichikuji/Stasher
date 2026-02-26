@@ -1,16 +1,22 @@
 # Stasher
 A small extension to manage tabs in your Chromium browser!
 
+## Tag versioning workflow
+
+For the workflow on how to generate and push new releases with tags, read [GUIDE.md](.github/workflows/GUIDE.md)
+
+## Description
+
 At this time ( it will update ) it does the following:
 
-## Functionality
+### Functionality
 
-### Groupped tabs stashing
+#### Groupped tabs stashing
 Stash tabs via clicking the extension icon. If it finds a tab group being focused at the time of clicking, it will save only the tabs within that tab group.
 
 Then it will remove the tabs and tab group from visibility and move it to internal storage. From there, you can decide to recover it or leave it as-is.
 
-### Non groupped tab stashing
+#### Non groupped tab stashing
 
 If you click on a non-group-tab, it will save ALL of the non-groupped-tabs with exceptions. The exceptions are:
 

@@ -32,6 +32,8 @@ That's it for now. As you can see it is minimal, but it is like this by design. 
 
 Not at this time. Thinking about having to pay 5$ just to upload it hurts my soul a little bit. If someone donates that amount I will ensure to upload it in due time. Teehee.
 
+If you want to help me with this, I'd really appreciate it, just go ahead and drop a coffee here: [paypal.me](https://paypal.me/ivanperezf)
+
 ---
 
 Anyways that's it for real now. Thanks as always. If you find bugs or errors report them accordingly.

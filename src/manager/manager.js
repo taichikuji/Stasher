@@ -200,21 +200,13 @@ function renderEditMode(container, item) {
     colorPicker.appendChild(dot);
   });
 
-  // 3. Save Button
-  const saveBtn = document.createElement('button');
-  saveBtn.className = 'icon-btn save-btn';
-  saveBtn.innerHTML = '&#10004;';
-  saveBtn.onclick = async () => {
+  // Shared handlers (used by both buttons and keyboard shortcuts)
+  const handleSave = async () => {
     await updateStashData(item.id, input.value, selectedColor);
     renderViewMode(container, { ...item, title: input.value, color: selectedColor });
   };
 
-  // 4. Cancel Button
-  const cancelBtn = document.createElement('button');
-  cancelBtn.className = 'icon-btn cancel-btn';
-  cancelBtn.innerHTML = '&#10006;';
-  // Re-fetch clean data to revert changes
-  cancelBtn.onclick = async () => {
+  const handleCancel = async () => {
     const freshData = await chrome.storage.local.get({ [CONFIG.STORAGE_KEY]: [] });
     const originalItem = freshData[CONFIG.STORAGE_KEY].find(i => i.id === item.id);
     // If originalItem is undefined (maybe deleted in another window), fallback safely
@@ -224,6 +216,25 @@ function renderEditMode(container, item) {
       loadStashes(); // Reload full list if item is gone
     }
   };
+
+  // Keyboard shortcuts: Enter to save, Escape to cancel
+  input.addEventListener('keydown', e => {
+    if (e.key === 'Enter') handleSave();
+    if (e.key === 'Escape') handleCancel();
+  });
+
+  // 3. Save Button
+  const saveBtn = document.createElement('button');
+  saveBtn.className = 'icon-btn save-btn';
+  saveBtn.innerHTML = '&#10004;';
+  saveBtn.onclick = handleSave;
+
+  // 4. Cancel Button
+  const cancelBtn = document.createElement('button');
+  cancelBtn.className = 'icon-btn cancel-btn';
+  cancelBtn.innerHTML = '&#10006;';
+  // Re-fetch clean data to revert changes
+  cancelBtn.onclick = handleCancel;
 
   wrapper.appendChild(input);
   wrapper.appendChild(colorPicker);

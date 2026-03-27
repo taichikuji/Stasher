@@ -13,7 +13,7 @@ jobs:
   release:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Set version
         id: version
@@ -30,7 +30,7 @@ jobs:
           zip -r "Stasher_${{ env.VERSION }}.chromium.zip" . -x "*.git*" ".github/*" "README.md"
 
       - name: Upload Artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: stasher-extension
           path: Stasher_${{ env.VERSION }}.chromium.zip

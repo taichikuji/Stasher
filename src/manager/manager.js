@@ -2,12 +2,15 @@
 const CONFIG = {
   STORAGE_KEY: 'stashedItems',
   THEME_KEY: 'themePreference',
-  CHROME_COLORS: ['grey', 'blue', 'red', 'yellow', 'green', 'pink', 'purple', 'cyan', 'orange']
+  CHROME_COLORS: ['grey', 'blue', 'red', 'yellow', 'green', 'pink', 'purple', 'cyan', 'orange'],
+  UNDO_TIMEOUT_MS: 5000,
+  TOAST_DURATION_MS: 3000,
+  MAX_TITLE_LENGTH: 200
 };
 
 // State Management
 const state = {
-  lastDeletedItem: null,
+  undoStack: [],
   undoTimeout: null
 };
 
@@ -22,7 +25,11 @@ const elements = {
   themeToggleBtn: document.getElementById('themeToggleBtn'),
   exportBtn: document.getElementById('exportBtn'),
   importBtn: document.getElementById('importBtn'),
-  importFile: document.getElementById('importFile')
+  importFile: document.getElementById('importFile'),
+  confirmModal: document.getElementById('confirm-modal'),
+  confirmTitle: document.getElementById('confirm-title'),
+  confirmOk: document.getElementById('confirm-ok'),
+  confirmCancel: document.getElementById('confirm-cancel')
 };
 
 // Initial Load
@@ -47,7 +54,10 @@ async function loadStashes() {
     elements.container.innerHTML = '';
 
     if (result[CONFIG.STORAGE_KEY].length === 0) {
-      elements.container.innerHTML = '<p style="text-align:center; padding:20px;">No tabs stashed yet.</p>';
+      const p = document.createElement('p');
+      p.className = 'empty-state';
+      p.textContent = 'No tabs stashed yet.';
+      elements.container.appendChild(p);
       return;
     }
 
@@ -61,7 +71,10 @@ async function loadStashes() {
 
   } catch (error) {
     console.error("Error loading stashes:", error);
-    elements.container.innerHTML = '<p style="text-align:center; color:red;">Error loading content.</p>';
+    const p = document.createElement('p');
+    p.className = 'error-state';
+    p.textContent = 'Error loading content.';
+    elements.container.appendChild(p);
   }
 }
 
@@ -71,7 +84,7 @@ async function loadStashes() {
 function createStashCard(item) {
   const card = document.createElement('div');
   card.className = 'stash-card';
-  
+
   const header = document.createElement('div');
   header.className = 'card-header';
   header.id = `header-${item.id}`; // Give ID for easier swapping
@@ -99,51 +112,68 @@ function createStashCard(item) {
 function createTabListItem(tab) {
   const li = document.createElement('li');
   li.className = 'link-item';
-  
+
   const img = document.createElement('img');
   const faviconUrl = chrome.runtime.getURL(`_favicon/?pageUrl=${encodeURIComponent(tab.url)}&size=16`);
   img.src = faviconUrl;
-  
+  img.alt = '';
+
   const a = document.createElement('a');
   a.href = tab.url;
   a.textContent = tab.title || tab.url;
   a.target = '_blank';
+  a.rel = 'noopener';
 
   const openBtn = document.createElement('button');
   openBtn.className = 'open-one-btn';
   openBtn.textContent = 'Open';
+  openBtn.setAttribute('aria-label', `Open ${tab.title || tab.url}`);
   openBtn.onclick = () => chrome.tabs.create({ url: tab.url, active: false });
 
   li.appendChild(img);
   li.appendChild(a);
   li.appendChild(openBtn);
-  
+
   return li;
+}
+
+/**
+ * Formats an ISO timestamp for display.
+ */
+function formatTimestamp(timestamp) {
+  try {
+    const date = new Date(timestamp);
+    if (isNaN(date.getTime())) return timestamp;
+    return date.toLocaleString();
+  } catch {
+    return timestamp;
+  }
 }
 
 /**
  * Renders the header in "View Mode".
  */
 function renderViewMode(container, item) {
-  container.innerHTML = ''; // Clear current content
+  container.innerHTML = '';
 
   // 1. Badge
   const badge = document.createElement('span');
   badge.className = `group-badge color-${item.color || 'grey'}`;
   badge.textContent = item.title || (item.type === 'group' ? 'Untitled Group' : 'Ungrouped Tabs');
-  
+
   // 2. Edit Pencil Button
   const editBtn = document.createElement('button');
   editBtn.className = 'icon-btn';
   editBtn.innerHTML = '&#9998;';
   editBtn.title = 'Edit Title & Color';
+  editBtn.setAttribute('aria-label', 'Edit title and color');
   editBtn.onclick = () => renderEditMode(container, item);
 
   // 3. Metadata
   const meta = document.createElement('span');
   meta.className = 'meta-info';
-  meta.innerText = `${item.tabs.length} tabs • ${item.timestamp}`;
-  meta.style.marginLeft = "auto"; // Push buttons to the right
+  meta.textContent = `${item.tabs.length} tabs \u2022 ${formatTimestamp(item.timestamp)}`;
+  meta.style.marginLeft = "auto";
 
   // 4. Action Buttons
   const actions = document.createElement('div');
@@ -151,11 +181,13 @@ function renderViewMode(container, item) {
 
   const btnRestore = document.createElement('button');
   btnRestore.textContent = 'Restore All';
+  btnRestore.setAttribute('aria-label', `Restore all tabs from ${item.title || 'stash'}`);
   btnRestore.onclick = () => restoreGroup(item);
 
   const btnDelete = document.createElement('button');
   btnDelete.textContent = 'Delete';
   btnDelete.className = 'danger';
+  btnDelete.setAttribute('aria-label', `Delete ${item.title || 'stash'}`);
   btnDelete.onclick = () => deleteStash(item.id);
 
   // Construct
@@ -171,7 +203,7 @@ function renderViewMode(container, item) {
  * Renders the header in "Edit Mode".
  */
 function renderEditMode(container, item) {
-  container.innerHTML = ''; // Clear view mode
+  container.innerHTML = '';
 
   const wrapper = document.createElement('div');
   wrapper.className = 'edit-container';
@@ -182,19 +214,30 @@ function renderEditMode(container, item) {
   input.className = 'edit-input';
   input.value = item.title;
   input.placeholder = "Group Name";
+  input.maxLength = CONFIG.MAX_TITLE_LENGTH;
+  input.setAttribute('aria-label', 'Stash title');
 
   // 2. Color Picker (Row of dots)
   const colorPicker = document.createElement('div');
   colorPicker.className = 'color-picker';
+  colorPicker.setAttribute('role', 'radiogroup');
+  colorPicker.setAttribute('aria-label', 'Group color');
   let selectedColor = item.color;
 
   CONFIG.CHROME_COLORS.forEach(color => {
-    const dot = document.createElement('div');
+    const dot = document.createElement('button');
     dot.className = `color-dot color-${color} ${color === item.color ? 'selected' : ''}`;
+    dot.setAttribute('role', 'radio');
+    dot.setAttribute('aria-checked', color === item.color ? 'true' : 'false');
+    dot.setAttribute('aria-label', color);
     dot.onclick = () => {
       // Handle selection visual
-      colorPicker.querySelectorAll('.color-dot').forEach(d => d.classList.remove('selected'));
+      colorPicker.querySelectorAll('.color-dot').forEach(d => {
+        d.classList.remove('selected');
+        d.setAttribute('aria-checked', 'false');
+      });
       dot.classList.add('selected');
+      dot.setAttribute('aria-checked', 'true');
       selectedColor = color;
     };
     colorPicker.appendChild(dot);
@@ -209,11 +252,10 @@ function renderEditMode(container, item) {
   const handleCancel = async () => {
     const freshData = await chrome.storage.local.get({ [CONFIG.STORAGE_KEY]: [] });
     const originalItem = freshData[CONFIG.STORAGE_KEY].find(i => i.id === item.id);
-    // If originalItem is undefined (maybe deleted in another window), fallback safely
     if (originalItem) {
       renderViewMode(container, originalItem);
     } else {
-      loadStashes(); // Reload full list if item is gone
+      loadStashes();
     }
   };
 
@@ -227,12 +269,14 @@ function renderEditMode(container, item) {
   const saveBtn = document.createElement('button');
   saveBtn.className = 'icon-btn save-btn';
   saveBtn.innerHTML = '&#10004;';
+  saveBtn.setAttribute('aria-label', 'Save changes');
   saveBtn.onclick = handleSave;
 
   // 4. Cancel Button
   const cancelBtn = document.createElement('button');
   cancelBtn.className = 'icon-btn cancel-btn';
   cancelBtn.innerHTML = '&#10006;';
+  cancelBtn.setAttribute('aria-label', 'Cancel editing');
   // Re-fetch clean data to revert changes
   cancelBtn.onclick = handleCancel;
 
@@ -248,13 +292,10 @@ async function updateStashData(id, newTitle, newColor) {
     const result = await chrome.storage.local.get({ [CONFIG.STORAGE_KEY]: [] });
     const items = result[CONFIG.STORAGE_KEY];
     const index = items.findIndex(i => i.id === id);
-    
+
     if (index !== -1) {
-      // Update the specific fields
       items[index].title = newTitle;
       items[index].color = newColor;
-      
-      // Save back to storage (This triggers the onChanged listener to reload UI)
       await chrome.storage.local.set({ [CONFIG.STORAGE_KEY]: items });
     }
   } catch (error) {
@@ -264,15 +305,20 @@ async function updateStashData(id, newTitle, newColor) {
 
 async function restoreGroup(item) {
   let tempWindow = null; // We declare this outside to ensure we can close it later
-  
+
   try {
     // 1. Get reference to current window
     const originalWindow = await chrome.windows.getCurrent();
 
-    // 2. Create Tabs (Hidden initially)
-    const tabPromises = item.tabs.map(t => chrome.tabs.create({ url: t.url, active: false }));
-    const createdTabs = await Promise.all(tabPromises);
-    const tabIds = createdTabs.map(t => t.id);
+    // 2. Create Tabs (in batches of 5 to avoid overwhelming the browser)
+    const tabIds = [];
+    for (let i = 0; i < item.tabs.length; i += 5) {
+      const batch = item.tabs.slice(i, i + 5);
+      const created = await Promise.all(
+        batch.map(t => chrome.tabs.create({ url: t.url, active: false }))
+      );
+      tabIds.push(...created.map(t => t.id));
+    }
 
     if (item.type === 'group') {
       // 3. Create Group
@@ -290,9 +336,9 @@ async function restoreGroup(item) {
       // Tab managers, such as OneTab. As such, we had to come up with a workaround.
 
       // It's dirty. But works.
-      
+
       // A. Create a minimized helper window in the background
-      tempWindow = await chrome.windows.create({ 
+      tempWindow = await chrome.windows.create({
         type: 'normal',
         focused: false,      // Don't steal focus from the user
         state: 'minimized'   // Keep it in the taskbar
@@ -307,14 +353,14 @@ async function restoreGroup(item) {
 
       // D. Move it BACK to your main window
       await chrome.tabGroups.move(groupId, { windowId: originalWindow.id, index: -1 });
-      
+
       // E. Re-focus the original window (just in case)
       await chrome.windows.update(originalWindow.id, { focused: true });
     }
 
     // 5. Cleanup Storage
-    // We do not await this because we want to delete it in the background while the user sees their tabs
-    deleteStash(item.id);
+    // We do not fully await this because we want to delete it in the background while the user sees their tabs
+    deleteStash(item.id).catch(err => console.error("Error deleting after restore:", err));
 
   } catch (error) {
     console.error("Error restoring group:", error);
@@ -332,11 +378,11 @@ async function deleteStash(id) {
     const result = await chrome.storage.local.get({ [CONFIG.STORAGE_KEY]: [] });
     const items = result[CONFIG.STORAGE_KEY];
     const itemIndex = items.findIndex(i => i.id === id);
-    
-    if (itemIndex === -1) return; // Item not found
+
+    if (itemIndex === -1) return;
 
     // 2. Save it to memory (The Safety Net)
-    state.lastDeletedItem = items[itemIndex];
+    state.undoStack.push(items[itemIndex]);
 
     // 3. Remove it from storage immediately
     const newItems = items.filter(i => i.id !== id);
@@ -349,12 +395,14 @@ async function deleteStash(id) {
   }
 }
 
+// Undo Toast
 function showUndoToast() {
-  if (!state.lastDeletedItem) return;
+  const lastItem = state.undoStack[state.undoStack.length - 1];
+  if (!lastItem) return;
 
   // Update text based on what we deleted
-  const name = state.lastDeletedItem.title || "Group";
-  elements.undoMsg.textContent = `Deleted "${name.substring(0, 20)}${name.length>20?'...':''}"`;
+  const name = lastItem.title || "Group";
+  elements.undoMsg.textContent = `Deleted "${name.substring(0, 20)}${name.length > 20 ? '...' : ''}"`;
 
   // Clear previous timer if one exists
   if (state.undoTimeout) clearTimeout(state.undoTimeout);
@@ -362,11 +410,11 @@ function showUndoToast() {
   // Show the toast
   elements.undoToast.classList.remove('hidden');
 
-  // Auto-hide after 5 seconds
+  // Auto-hide after timeout
   state.undoTimeout = setTimeout(() => {
     hideUndoToast();
-    state.lastDeletedItem = null; // Clear memory, it's gone forever now
-  }, 5000);
+    state.undoStack = []; // Clear memory, it's gone forever now
+  }, CONFIG.UNDO_TIMEOUT_MS);
 }
 
 function hideUndoToast() {
@@ -375,24 +423,65 @@ function hideUndoToast() {
 }
 
 async function handleUndo() {
-  if (!state.lastDeletedItem) return;
+  const itemToRestore = state.undoStack.pop();
+  if (!itemToRestore) return;
 
   try {
     // 1. Get current list
     const result = await chrome.storage.local.get({ [CONFIG.STORAGE_KEY]: [] });
-    
+
     // 2. Add the item back to the TOP of the list
-    const newItems = [state.lastDeletedItem, ...result[CONFIG.STORAGE_KEY]];
-    
+    const newItems = [itemToRestore, ...result[CONFIG.STORAGE_KEY]];
+
     // 3. Save
     await chrome.storage.local.set({ [CONFIG.STORAGE_KEY]: newItems });
 
     // 4. Cleanup
     hideUndoToast();
-    state.lastDeletedItem = null;
+    if (state.undoStack.length === 0) {
+      state.undoStack = [];
+    }
   } catch (error) {
     console.error("Error undoing delete:", error);
   }
+}
+
+// Info Toast (replaces alert)
+function showInfoToast(message) {
+  elements.undoMsg.textContent = message;
+  elements.undoBtn.style.display = 'none';
+  elements.undoToast.classList.remove('hidden');
+
+  if (state.undoTimeout) clearTimeout(state.undoTimeout);
+  state.undoTimeout = setTimeout(() => {
+    elements.undoToast.classList.add('hidden');
+    elements.undoBtn.style.display = '';
+  }, CONFIG.TOAST_DURATION_MS);
+}
+
+// Confirm Modal (replaces native confirm)
+function showConfirmModal(message) {
+  return new Promise((resolve) => {
+    elements.confirmTitle.textContent = message;
+    elements.confirmModal.classList.remove('hidden');
+    elements.confirmOk.focus();
+
+    const cleanup = (result) => {
+      elements.confirmModal.classList.add('hidden');
+      elements.confirmOk.onclick = null;
+      elements.confirmCancel.onclick = null;
+      document.removeEventListener('keydown', onKey);
+      resolve(result);
+    };
+
+    const onKey = (e) => {
+      if (e.key === 'Escape') cleanup(false);
+    };
+    document.addEventListener('keydown', onKey);
+
+    elements.confirmOk.onclick = () => cleanup(true);
+    elements.confirmCancel.onclick = () => cleanup(false);
+  });
 }
 
 async function handleExport() {
@@ -402,12 +491,26 @@ async function handleExport() {
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `grouptab-stash-${Date.now()}.json`;
+    a.download = `stasher-export-${Date.now()}.json`;
     a.click();
     URL.revokeObjectURL(url); // Cleanup
   } catch (error) {
     console.error("Error exporting:", error);
   }
+}
+
+/**
+ * Validates that an imported stash item has the required shape.
+ */
+function isValidStashItem(item) {
+  if (!item || typeof item !== 'object') return false;
+  if (typeof item.id !== 'string' && typeof item.id !== 'number') return false;
+  if (!Array.isArray(item.tabs)) return false;
+  return item.tabs.every(tab =>
+    tab && typeof tab === 'object' &&
+    typeof tab.url === 'string' &&
+    typeof tab.title === 'string'
+  );
 }
 
 function handleImport(event) {
@@ -418,29 +521,43 @@ function handleImport(event) {
   reader.onload = async (e) => {
     try {
       const importedData = JSON.parse(e.target.result);
-      if (Array.isArray(importedData)) {
-        const current = await chrome.storage.local.get({ [CONFIG.STORAGE_KEY]: [] });
-        const merged = [...importedData, ...current[CONFIG.STORAGE_KEY]];
-        
-        // Remove duplicates based on ID
-        const unique = merged.filter((v,i,a) => a.findIndex(t => (t.id === v.id)) === i);
-        
-        await chrome.storage.local.set({ [CONFIG.STORAGE_KEY]: unique });
-        alert('Import successful!');
-      } else {
-        alert('Invalid format: Expected an array.');
+      if (!Array.isArray(importedData)) {
+        showInfoToast('Invalid format: expected an array.');
+        return;
       }
+
+      const valid = importedData.filter(isValidStashItem);
+      if (valid.length === 0) {
+        showInfoToast('No valid stash items found in file.');
+        return;
+      }
+
+      const current = await chrome.storage.local.get({ [CONFIG.STORAGE_KEY]: [] });
+      const merged = [...valid, ...current[CONFIG.STORAGE_KEY]];
+
+      // Remove duplicates based on ID
+      const unique = merged.filter((v, i, a) => a.findIndex(t => (t.id === v.id)) === i);
+
+      await chrome.storage.local.set({ [CONFIG.STORAGE_KEY]: unique });
+
+      const added = unique.length - current[CONFIG.STORAGE_KEY].length;
+      showInfoToast(`Imported ${added} new stash${added !== 1 ? 'es' : ''}.`);
     } catch (err) {
       console.error("Import error:", err);
-      alert('Error parsing JSON');
+      showInfoToast('Error parsing JSON file.');
     }
+    // Reset so the same file can be re-imported
+    event.target.value = '';
   };
   reader.readAsText(file);
 }
 
 async function handleDeleteAll() {
-  if (confirm("WARNING: This will delete ALL saved tabs and groups.\n\nAre you sure you want to proceed?")) {
-    await chrome.storage.local.clear();
+  const confirmed = await showConfirmModal(
+    "WARNING: This will delete ALL saved tabs and groups.\n\nAre you sure you want to proceed?"
+  );
+  if (confirmed) {
+    await chrome.storage.local.remove(CONFIG.STORAGE_KEY);
   }
 }
 
@@ -456,14 +573,18 @@ function setupEventListeners() {
   elements.importBtn.onclick = () => elements.importFile.click();
   elements.importFile.onchange = handleImport;
 }
+
 // Theme Management
 function initTheme() {
   const savedTheme = localStorage.getItem(CONFIG.THEME_KEY);
-  // Default to light (which is null or 'light')
-  if (savedTheme === 'dark') {
-    applyTheme('dark');
+
+  if (savedTheme) {
+    // Explicit preference saved, use it
+    applyTheme(savedTheme);
   } else {
-    applyTheme('light');
+    // Default to OS preference
+    const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+    applyTheme(prefersDark ? 'dark' : 'light');
   }
 }
 
@@ -482,4 +603,8 @@ function applyTheme(theme) {
     document.documentElement.removeAttribute('data-theme');
     elements.themeToggleBtn.textContent = '🐈‍⬛';
   }
+  // Enable smooth transitions only after the initial theme is applied
+  requestAnimationFrame(() => {
+    document.body.style.transition = 'background-color 0.3s, color 0.3s';
+  });
 }

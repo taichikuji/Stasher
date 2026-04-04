@@ -8,9 +8,11 @@
     "tabs",
     "tabGroups",
     "storage",
-    "activeTab",
-    "favicon" 
+    "favicon"
   ],
+  "content_security_policy": {
+    "extension_pages": "script-src 'self'; object-src 'self'"
+  },
   "action": {
     "default_title": "Click to Stash"
   },

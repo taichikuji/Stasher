@@ -5,7 +5,8 @@ const CONFIG = {
   IGNORED_URLS: [
     'chrome://newtab/',
     'about:blank'
-  ]
+  ],
+  ALLOWED_SCHEMES: ['http:', 'https:', 'chrome-extension:']
 };
 
 /**
@@ -87,11 +88,15 @@ const processStash = async (stashData, tabsToRemove, windowId) => {
  */
 const filterStashableTabs = (tabs) => {
   const managerUrl = chrome.runtime.getURL(CONFIG.MANAGER_PATH);
-  return tabs.filter(t => 
-    !t.pinned && 
-    t.url !== managerUrl &&
-    !CONFIG.IGNORED_URLS.includes(t.url)
-  );
+  return tabs.filter(t => {
+    if (t.pinned || t.url === managerUrl || CONFIG.IGNORED_URLS.includes(t.url)) return false;
+    try {
+      const scheme = new URL(t.url).protocol;
+      return CONFIG.ALLOWED_SCHEMES.includes(scheme);
+    } catch {
+      return false;
+    }
+  });
 };
 
 // Main Action Listener
@@ -135,8 +140,8 @@ chrome.action.onClicked.addListener(async (tab) => {
     // Construct stash data if we have tabs
     if (tabsToStash.length > 0) {
       stashData = {
-        id: Date.now(),
-        timestamp: new Date().toLocaleString(),
+        id: crypto.randomUUID(),
+        timestamp: new Date().toISOString(),
         type: stashType,
         title: groupTitle,
         color: groupColor,

@@ -461,8 +461,13 @@ function showInfoToast(message) {
 // Confirm Modal (replaces native confirm)
 function showConfirmModal(message) {
   return new Promise((resolve) => {
+    // Remember what element was focused before the modal opened
+    const previousFocus = document.activeElement;
+
     elements.confirmTitle.textContent = message;
     elements.confirmModal.classList.remove('hidden');
+
+    // Set initial focus
     elements.confirmOk.focus();
 
     const cleanup = (result) => {
@@ -470,12 +475,32 @@ function showConfirmModal(message) {
       elements.confirmOk.onclick = null;
       elements.confirmCancel.onclick = null;
       document.removeEventListener('keydown', onKey);
+
+      // Return focus back to the triggering element
+      if (previousFocus) previousFocus.focus();
+
       resolve(result);
     };
 
     const onKey = (e) => {
       if (e.key === 'Escape') cleanup(false);
+
+      // Trap the focus inside the modal
+      if (e.key === 'Tab') {
+        // If holding Shift + Tab while on the OK button, loop back to Cancel
+        if (e.shiftKey && document.activeElement === elements.confirmOk) {
+          e.preventDefault();
+          elements.confirmCancel.focus();
+        }
+        // If pressing Tab while on the Cancel button, loop back to OK
+        else if (!e.shiftKey && document.activeElement === elements.confirmCancel) {
+          e.preventDefault();
+          elements.confirmOk.focus();
+        }
+      }
     };
+
+    // Use 'keydown' so we catch the Tab key before the browser moves focus
     document.addEventListener('keydown', onKey);
 
     elements.confirmOk.onclick = () => cleanup(true);

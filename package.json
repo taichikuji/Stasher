@@ -17,5 +17,8 @@
   "bugs": {
     "url": "https://github.com/taichikuji/Stasher/issues"
   },
-  "homepage": "https://github.com/taichikuji/Stasher#readme"
+  "homepage": "https://github.com/taichikuji/Stasher#readme",
+  "dependencies": {
+    "fallow": "^2.13.0"
+  }
 }

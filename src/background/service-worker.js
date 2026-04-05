@@ -9,17 +9,18 @@ const CONFIG = {
   ALLOWED_SCHEMES: ['http:', 'https:', 'chrome-extension:']
 };
 
+const MANAGER_URL = chrome.runtime.getURL(CONFIG.MANAGER_PATH);
+
 /**
  * Opens or focuses the Stasher manager tab.
  * @param {number} windowId - The ID of the window to open the manager in.
  * @returns {Promise<chrome.tabs.Tab>} The manager tab.
  */
 const openManager = async (windowId) => {
-  const managerUrl = chrome.runtime.getURL(CONFIG.MANAGER_PATH);
   
   // Check if manager is already open in this window
   const tabs = await chrome.tabs.query({ windowId });
-  const managerTab = tabs.find(t => t.url === managerUrl);
+  const managerTab = tabs.find(t => t.url === MANAGER_URL);
 
   if (managerTab) {
     // If found, highlight it and ensure it's pinned
@@ -28,7 +29,7 @@ const openManager = async (windowId) => {
   } else {
     // If not found, create it pinned at index 0 (far left)
     return await chrome.tabs.create({ 
-      url: managerUrl, 
+      url: MANAGER_URL, 
       index: 0, 
       pinned: true, 
       active: true 
@@ -73,11 +74,6 @@ const processStash = async (stashData, tabsToRemove, windowId) => {
     }
   } catch (error) {
     console.error("Error processing stash:", error);
-    // If saving failed, we might still want to open the manager so the user sees something happened
-    // but we generally shouldn't delete the tabs if save failed.
-    if (!stashData) {
-        await openManager(windowId);
-    }
   }
 };
 
@@ -87,9 +83,8 @@ const processStash = async (stashData, tabsToRemove, windowId) => {
  * @returns {chrome.tabs.Tab[]} Filtered list of tabs.
  */
 const filterStashableTabs = (tabs) => {
-  const managerUrl = chrome.runtime.getURL(CONFIG.MANAGER_PATH);
   return tabs.filter(t => {
-    if (t.pinned || t.url === managerUrl || CONFIG.IGNORED_URLS.includes(t.url)) return false;
+    if (t.pinned || t.url === MANAGER_URL || CONFIG.IGNORED_URLS.includes(t.url)) return false;
     try {
       const scheme = new URL(t.url).protocol;
       return CONFIG.ALLOWED_SCHEMES.includes(scheme);
@@ -107,7 +102,7 @@ chrome.action.onClicked.addListener(async (tab) => {
   try {
     let stashData = null;
     let tabsToStash = [];
-    let groupTitle = "Untitled Group";
+    let groupTitle = "Ungrouped Tabs";
     let groupColor = "grey";
     let stashType = 'loose';
 
@@ -131,10 +126,6 @@ chrome.action.onClicked.addListener(async (tab) => {
       });
       
       tabsToStash = filterStashableTabs(looseTabs);
-      
-      stashType = 'loose';
-      groupTitle = "Ungrouped Tabs";
-      groupColor = "grey";
     }
 
     // Construct stash data if we have tabs

@@ -14,6 +14,10 @@ const state = {
   undoTimeout: null
 };
 
+// Storage Helpers
+const getStashItems = async () => (await chrome.storage.local.get({ [CONFIG.STORAGE_KEY]: [] }))[CONFIG.STORAGE_KEY];
+const setStashItems = async (items) => chrome.storage.local.set({ [CONFIG.STORAGE_KEY]: items });
+
 // DOM Elements
 const elements = {
   container: document.getElementById('stash-container'),
@@ -50,10 +54,10 @@ setupEventListeners();
 
 async function loadStashes() {
   try {
-    const result = await chrome.storage.local.get({ [CONFIG.STORAGE_KEY]: [] });
+    const items = await getStashItems();
     elements.container.innerHTML = '';
 
-    if (result[CONFIG.STORAGE_KEY].length === 0) {
+    if (items.length === 0) {
       const p = document.createElement('p');
       p.className = 'empty-state';
       p.textContent = 'No tabs stashed yet.';
@@ -63,7 +67,7 @@ async function loadStashes() {
 
     // Render each stash item
     const fragment = document.createDocumentFragment();
-    result[CONFIG.STORAGE_KEY].forEach(item => {
+    items.forEach(item => {
       const card = createStashCard(item);
       fragment.appendChild(card);
     });
@@ -252,8 +256,8 @@ function renderEditMode(container, item) {
   };
 
   const handleCancel = async () => {
-    const freshData = await chrome.storage.local.get({ [CONFIG.STORAGE_KEY]: [] });
-    const originalItem = freshData[CONFIG.STORAGE_KEY].find(i => i.id === item.id);
+    const items = await getStashItems();
+    const originalItem = items.find(i => i.id === item.id);
     if (originalItem) {
       renderViewMode(container, originalItem);
     } else {
@@ -291,14 +295,13 @@ function renderEditMode(container, item) {
 
 async function updateStashData(id, newTitle, newColor) {
   try {
-    const result = await chrome.storage.local.get({ [CONFIG.STORAGE_KEY]: [] });
-    const items = result[CONFIG.STORAGE_KEY];
+    const items = await getStashItems();
     const index = items.findIndex(i => i.id === id);
 
     if (index !== -1) {
       items[index].title = newTitle;
       items[index].color = newColor;
-      await chrome.storage.local.set({ [CONFIG.STORAGE_KEY]: items });
+      await setStashItems(items);
     }
   } catch (error) {
     console.error("Error updating stash data:", error);
@@ -377,8 +380,7 @@ async function restoreGroup(item) {
 async function deleteStash(id) {
   try {
     // 1. Get current list to find the item we are about to delete
-    const result = await chrome.storage.local.get({ [CONFIG.STORAGE_KEY]: [] });
-    const items = result[CONFIG.STORAGE_KEY];
+    const items = await getStashItems();
     const itemIndex = items.findIndex(i => i.id === id);
 
     if (itemIndex === -1) return;
@@ -388,7 +390,7 @@ async function deleteStash(id) {
 
     // 3. Remove it from storage immediately
     const newItems = items.filter(i => i.id !== id);
-    await chrome.storage.local.set({ [CONFIG.STORAGE_KEY]: newItems });
+    await setStashItems(newItems);
 
     // 4. Show the Undo Toast
     showUndoToast();
@@ -430,19 +432,16 @@ async function handleUndo() {
 
   try {
     // 1. Get current list
-    const result = await chrome.storage.local.get({ [CONFIG.STORAGE_KEY]: [] });
+    const items = await getStashItems();
 
     // 2. Add the item back to the TOP of the list
-    const newItems = [itemToRestore, ...result[CONFIG.STORAGE_KEY]];
+    const newItems = [itemToRestore, ...items];
 
     // 3. Save
-    await chrome.storage.local.set({ [CONFIG.STORAGE_KEY]: newItems });
+    await setStashItems(newItems);
 
     // 4. Cleanup
     hideUndoToast();
-    if (state.undoStack.length === 0) {
-      state.undoStack = [];
-    }
   } catch (error) {
     console.error("Error undoing delete:", error);
   }
@@ -464,8 +463,13 @@ function showInfoToast(message) {
 // Confirm Modal (replaces native confirm)
 function showConfirmModal(message) {
   return new Promise((resolve) => {
+    // Remember what element was focused before the modal opened
+    const previousFocus = document.activeElement;
+
     elements.confirmTitle.textContent = message;
     elements.confirmModal.classList.remove('hidden');
+
+    // Set initial focus
     elements.confirmOk.focus();
 
     const cleanup = (result) => {
@@ -473,12 +477,32 @@ function showConfirmModal(message) {
       elements.confirmOk.onclick = null;
       elements.confirmCancel.onclick = null;
       document.removeEventListener('keydown', onKey);
+
+      // Return focus back to the triggering element
+      if (previousFocus) previousFocus.focus();
+
       resolve(result);
     };
 
     const onKey = (e) => {
       if (e.key === 'Escape') cleanup(false);
+
+      // Trap the focus inside the modal
+      if (e.key === 'Tab') {
+        // If holding Shift + Tab while on the OK button, loop back to Cancel
+        if (e.shiftKey && document.activeElement === elements.confirmOk) {
+          e.preventDefault();
+          elements.confirmCancel.focus();
+        }
+        // If pressing Tab while on the Cancel button, loop back to OK
+        else if (!e.shiftKey && document.activeElement === elements.confirmCancel) {
+          e.preventDefault();
+          elements.confirmOk.focus();
+        }
+      }
     };
+
+    // Use 'keydown' so we catch the Tab key before the browser moves focus
     document.addEventListener('keydown', onKey);
 
     elements.confirmOk.onclick = () => cleanup(true);
@@ -488,8 +512,8 @@ function showConfirmModal(message) {
 
 async function handleExport() {
   try {
-    const result = await chrome.storage.local.get({ [CONFIG.STORAGE_KEY]: [] });
-    const blob = new Blob([JSON.stringify(result[CONFIG.STORAGE_KEY], null, 2)], { type: "application/json" });
+    const items = await getStashItems();
+    const blob = new Blob([JSON.stringify(items, null, 2)], { type: "application/json" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
@@ -534,15 +558,15 @@ function handleImport(event) {
         return;
       }
 
-      const current = await chrome.storage.local.get({ [CONFIG.STORAGE_KEY]: [] });
-      const merged = [...valid, ...current[CONFIG.STORAGE_KEY]];
+      const currentItems = await getStashItems();
+      const merged = [...valid, ...currentItems];
 
       // Remove duplicates based on ID
       const unique = merged.filter((v, i, a) => a.findIndex(t => (t.id === v.id)) === i);
 
-      await chrome.storage.local.set({ [CONFIG.STORAGE_KEY]: unique });
+      await setStashItems(unique);
 
-      const added = unique.length - current[CONFIG.STORAGE_KEY].length;
+      const added = unique.length - currentItems.length;
       showInfoToast(`Imported ${added} new stash${added !== 1 ? 'es' : ''}.`);
     } catch (err) {
       console.error("Import error:", err);

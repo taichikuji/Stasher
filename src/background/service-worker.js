@@ -107,7 +107,7 @@ chrome.action.onClicked.addListener(async (tab) => {
   try {
     let stashData = null;
     let tabsToStash = [];
-    let groupTitle = "Untitled Group";
+    let groupTitle = "Ungrouped Tabs";
     let groupColor = "grey";
     let stashType = 'loose';
 
@@ -131,10 +131,6 @@ chrome.action.onClicked.addListener(async (tab) => {
       });
       
       tabsToStash = filterStashableTabs(looseTabs);
-      
-      stashType = 'loose';
-      groupTitle = "Ungrouped Tabs";
-      groupColor = "grey";
     }
 
     // Construct stash data if we have tabs

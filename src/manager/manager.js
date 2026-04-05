@@ -440,9 +440,6 @@ async function handleUndo() {
 
     // 4. Cleanup
     hideUndoToast();
-    if (state.undoStack.length === 0) {
-      state.undoStack = [];
-    }
   } catch (error) {
     console.error("Error undoing delete:", error);
   }

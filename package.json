@@ -1,19 +1,19 @@
 {
   "name": "stasher",
-  "version": "1.0.0",
+  "version": "1.4.0",
   "description": "A small extension to manage tabs in your Chromium browser!",
-  "main": "index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "lint": "npx fallow",
+    "lint:dead-code": "npx fallow dead-code",
+    "lint:dupes": "npx fallow dupes",
+    "lint:health": "npx fallow health",
+    "lint:fix": "npx fallow fix --dry-run"
   },
   "repository": {
     "type": "git",
     "url": "git+https://github.com/taichikuji/Stasher.git"
   },
-  "keywords": [],
-  "author": "",
-  "license": "ISC",
-  "type": "commonjs",
+  "license": "Apache-2.0",
   "bugs": {
     "url": "https://github.com/taichikuji/Stasher/issues"
   },

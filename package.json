@@ -1,0 +1,21 @@
+{
+  "name": "stasher",
+  "version": "1.0.0",
+  "description": "A small extension to manage tabs in your Chromium browser!",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/taichikuji/Stasher.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "bugs": {
+    "url": "https://github.com/taichikuji/Stasher/issues"
+  },
+  "homepage": "https://github.com/taichikuji/Stasher#readme"
+}

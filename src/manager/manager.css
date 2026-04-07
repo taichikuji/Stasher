@@ -244,17 +244,6 @@ button.secondary:hover { background-color: var(--btn-secondary-hover); }
 .color-cyan   { background-color: #78d9ec; color: #007b83; } /* Cyan 900 text */
 .color-orange { background-color: #fcad70; color: #b06000; } /* Orange 900 text */
 
-/* Chrome Tab Group Colors - Dark theme overrides */
-[data-theme="dark"] .color-grey   { background-color: #5f6368; color: #e8eaed; }
-[data-theme="dark"] .color-blue   { background-color: #394d6d; color: #8ab4f8; }
-[data-theme="dark"] .color-red    { background-color: #5c2b2e; color: #f28b82; }
-[data-theme="dark"] .color-yellow { background-color: #5e4409; color: #fdd663; }
-[data-theme="dark"] .color-green  { background-color: #1e4328; color: #81c995; }
-[data-theme="dark"] .color-pink   { background-color: #5c1a3e; color: #ff8bcb; }
-[data-theme="dark"] .color-purple { background-color: #3b1e5c; color: #c58af9; }
-[data-theme="dark"] .color-cyan   { background-color: #1a3c42; color: #78d9ec; }
-[data-theme="dark"] .color-orange { background-color: #533610; color: #fcad70; }
-
 .card-actions button {
   font-size: 12px;
   padding: 6px 12px;
@@ -337,7 +326,6 @@ button.secondary:hover { background-color: var(--btn-secondary-hover); }
   border: 2px solid transparent;
   opacity: 0.6;
   padding: 0;
-  background: none;
   font-size: 0;
   margin-left: 0;
 }

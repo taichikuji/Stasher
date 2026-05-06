@@ -379,6 +379,14 @@ button.secondary:hover { background-color: var(--btn-secondary-hover); }
   transform: translate(-50%, 20px);
 }
 
+#info-toast {
+  bottom: 84px;
+}
+
+#info-toast.hidden {
+  transform: translate(-50%, 20px);
+}
+
 /* Undo Button */
 #undo-btn {
   background: none;

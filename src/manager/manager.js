@@ -11,7 +11,8 @@ const CONFIG = {
 // State Management
 const state = {
   undoStack: [],
-  undoTimeout: null
+  undoTimeout: null,
+  infoTimeout: null
 };
 
 // Storage Helpers
@@ -25,6 +26,9 @@ const elements = {
   undoMsg: document.getElementById('undo-msg'),
   undoBtn: document.getElementById('undo-btn'),
   closeToastBtn: document.getElementById('close-toast'),
+  infoToast: document.getElementById('info-toast'),
+  infoMsg: document.getElementById('info-msg'),
+  closeInfoToastBtn: document.getElementById('close-info-toast'),
   deleteAllBtn: document.getElementById('deleteAllBtn'),
   themeToggleBtn: document.getElementById('themeToggleBtn'),
   exportBtn: document.getElementById('exportBtn'),
@@ -401,29 +405,29 @@ async function deleteStash(id) {
 
 // Undo Toast
 function showUndoToast() {
-  const lastItem = state.undoStack[state.undoStack.length - 1];
-  if (!lastItem) return;
+  const count = state.undoStack.length;
+  if (count === 0) return;
 
-  // Update text based on what we deleted
-  const name = lastItem.title || "Group";
-  elements.undoMsg.textContent = `Deleted "${name.substring(0, 20)}${name.length > 20 ? '...' : ''}"`;
+  if (count === 1) {
+    const name = state.undoStack[0].title || "Group";
+    elements.undoMsg.textContent = `Deleted "${name.substring(0, 20)}${name.length > 20 ? '...' : ''}"`;
+  } else {
+    elements.undoMsg.textContent = `${count} stashes deleted`;
+  }
 
-  // Clear previous timer if one exists
   if (state.undoTimeout) clearTimeout(state.undoTimeout);
 
-  // Show the toast
   elements.undoToast.classList.remove('hidden');
 
-  // Auto-hide after timeout
-  state.undoTimeout = setTimeout(() => {
-    hideUndoToast();
-    state.undoStack = []; // Clear memory, it's gone forever now
-  }, CONFIG.UNDO_TIMEOUT_MS);
+  state.undoTimeout = setTimeout(hideUndoToast, CONFIG.UNDO_TIMEOUT_MS);
 }
 
 function hideUndoToast() {
   elements.undoToast.classList.add('hidden');
   if (state.undoTimeout) clearTimeout(state.undoTimeout);
+  // Hiding the toast forfeits any pending undo items; otherwise dismissed
+  // entries would resurface in the count on the next deletion.
+  state.undoStack = [];
 }
 
 async function handleUndo() {
@@ -431,33 +435,35 @@ async function handleUndo() {
   if (!itemToRestore) return;
 
   try {
-    // 1. Get current list
     const items = await getStashItems();
-
-    // 2. Add the item back to the TOP of the list
     const newItems = [itemToRestore, ...items];
-
-    // 3. Save
     await setStashItems(newItems);
 
-    // 4. Cleanup
-    hideUndoToast();
+    // If more deletions remain in the stack, refresh the toast for the next undo;
+    // otherwise hide it.
+    if (state.undoStack.length > 0) {
+      showUndoToast();
+    } else {
+      hideUndoToast();
+    }
   } catch (error) {
     console.error("Error undoing delete:", error);
   }
 }
 
-// Info Toast (replaces alert)
+// Info Toast (replaces alert) — uses its own element so it never collides
+// with an in-flight undo toast.
 function showInfoToast(message) {
-  elements.undoMsg.textContent = message;
-  elements.undoBtn.style.display = 'none';
-  elements.undoToast.classList.remove('hidden');
+  elements.infoMsg.textContent = message;
+  elements.infoToast.classList.remove('hidden');
 
-  if (state.undoTimeout) clearTimeout(state.undoTimeout);
-  state.undoTimeout = setTimeout(() => {
-    elements.undoToast.classList.add('hidden');
-    elements.undoBtn.style.display = '';
-  }, CONFIG.TOAST_DURATION_MS);
+  if (state.infoTimeout) clearTimeout(state.infoTimeout);
+  state.infoTimeout = setTimeout(hideInfoToast, CONFIG.TOAST_DURATION_MS);
+}
+
+function hideInfoToast() {
+  elements.infoToast.classList.add('hidden');
+  if (state.infoTimeout) clearTimeout(state.infoTimeout);
 }
 
 // Confirm Modal (replaces native confirm)
@@ -593,9 +599,10 @@ async function handleDeleteAll() {
 }
 
 function setupEventListeners() {
-  // Undo Toast Listeners
+  // Toast Listeners
   elements.undoBtn.onclick = handleUndo;
   elements.closeToastBtn.onclick = hideUndoToast;
+  elements.closeInfoToastBtn.onclick = hideInfoToast;
 
   // Global Actions
   elements.deleteAllBtn.onclick = handleDeleteAll;

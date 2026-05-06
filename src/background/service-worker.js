@@ -12,6 +12,20 @@ const CONFIG = {
 const MANAGER_URL = chrome.runtime.getURL(CONFIG.MANAGER_PATH);
 
 /**
+ * Updates the toolbar badge to show the current stash count.
+ */
+const updateBadge = async () => {
+  try {
+    const result = await chrome.storage.local.get({ [CONFIG.STORAGE_KEY]: [] });
+    const count = result[CONFIG.STORAGE_KEY].length;
+    await chrome.action.setBadgeText({ text: count > 0 ? String(count) : '' });
+    await chrome.action.setBadgeBackgroundColor({ color: '#1e66f5' });
+  } catch (error) {
+    console.error("Error updating badge:", error);
+  }
+};
+
+/**
  * Opens or focuses the Stasher manager tab.
  * @param {number} windowId - The ID of the window to open the manager in.
  * @returns {Promise<chrome.tabs.Tab>} The manager tab.
@@ -72,10 +86,22 @@ const processStash = async (stashData, tabsToRemove, windowId) => {
     if (tabsToRemove.length > 0 && stashData) {
       await chrome.tabs.remove(tabsToRemove.map(t => t.id));
     }
+
+    await updateBadge();
   } catch (error) {
     console.error("Error processing stash:", error);
   }
 };
+
+// Keep the badge in sync when the manager changes storage (delete, undo, import, etc.)
+chrome.storage.onChanged.addListener((changes, namespace) => {
+  if (namespace === 'local' && changes[CONFIG.STORAGE_KEY]) {
+    updateBadge();
+  }
+});
+
+chrome.runtime.onInstalled.addListener(updateBadge);
+chrome.runtime.onStartup.addListener(updateBadge);
 
 /**
  * Helper to filter valid tabs for stashing.

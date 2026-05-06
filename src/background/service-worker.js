@@ -100,8 +100,53 @@ chrome.storage.onChanged.addListener((changes, namespace) => {
   }
 });
 
-chrome.runtime.onInstalled.addListener(updateBadge);
+const CONTEXT_MENU_IDS = {
+  STASH_TAB: 'stash-this-tab',
+  STASH_LOOSE: 'stash-all-loose'
+};
+
+const registerContextMenus = () => {
+  chrome.contextMenus.create({
+    id: CONTEXT_MENU_IDS.STASH_TAB,
+    title: 'Stash this tab',
+    contexts: ['page', 'link']
+  });
+  chrome.contextMenus.create({
+    id: CONTEXT_MENU_IDS.STASH_LOOSE,
+    title: 'Stash all loose tabs',
+    contexts: ['page']
+  });
+};
+
+chrome.runtime.onInstalled.addListener(() => {
+  registerContextMenus();
+  updateBadge();
+});
 chrome.runtime.onStartup.addListener(updateBadge);
+
+chrome.contextMenus.onClicked.addListener(async (info, tab) => {
+  if (!tab) return;
+  if (info.menuItemId === CONTEXT_MENU_IDS.STASH_TAB) {
+    // Stash only the right-clicked tab so this option is not a duplicate of
+    // "Stash all loose tabs".
+    const stashable = filterStashableTabs([tab]);
+    if (stashable.length === 0) {
+      await openManager(tab.windowId);
+      return;
+    }
+    await processStash({
+      id: crypto.randomUUID(),
+      timestamp: new Date().toISOString(),
+      type: 'loose',
+      title: 'Ungrouped Tabs',
+      color: 'grey',
+      tabs: stashable.map(t => ({ title: t.title, url: t.url, favIconUrl: t.favIconUrl }))
+    }, stashable, tab.windowId);
+  } else if (info.menuItemId === CONTEXT_MENU_IDS.STASH_LOOSE) {
+    // Force the loose-tabs path by stripping the group id.
+    await handleStash({ ...tab, groupId: chrome.tabGroups.TAB_GROUP_ID_NONE });
+  }
+});
 
 /**
  * Helper to filter valid tabs for stashing.

@@ -8,7 +8,8 @@
     "tabs",
     "tabGroups",
     "storage",
-    "favicon"
+    "favicon",
+    "contextMenus"
   ],
   "content_security_policy": {
     "extension_pages": "script-src 'self'; object-src 'self'"

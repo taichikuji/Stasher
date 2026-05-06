@@ -120,8 +120,11 @@ const filterStashableTabs = (tabs) => {
   });
 };
 
-// Main Action Listener
-chrome.action.onClicked.addListener(async (tab) => {
+/**
+ * Stash logic shared by the toolbar action, keyboard shortcut, and context menu.
+ * @param {chrome.tabs.Tab} tab - The tab whose context (window/group) drives the stash.
+ */
+const handleStash = async (tab) => {
   const currentWindowId = tab.windowId;
   const currentGroupId = tab.groupId;
 
@@ -136,25 +139,24 @@ chrome.action.onClicked.addListener(async (tab) => {
     if (currentGroupId !== chrome.tabGroups.TAB_GROUP_ID_NONE) {
       const group = await chrome.tabGroups.get(currentGroupId);
       const tabsInGroup = await chrome.tabs.query({ groupId: currentGroupId });
-      
+
       tabsToStash = filterStashableTabs(tabsInGroup);
-      
+
       stashType = 'group';
       groupTitle = group.title || "Untitled Group";
       groupColor = group.color;
-    } 
-    
+    }
+
     // Scenario 2: Stash all "loose" (non-grouped) tabs in the window
     else {
-      const looseTabs = await chrome.tabs.query({ 
-        windowId: currentWindowId, 
-        groupId: chrome.tabGroups.TAB_GROUP_ID_NONE 
+      const looseTabs = await chrome.tabs.query({
+        windowId: currentWindowId,
+        groupId: chrome.tabGroups.TAB_GROUP_ID_NONE
       });
-      
+
       tabsToStash = filterStashableTabs(looseTabs);
     }
 
-    // Construct stash data if we have tabs
     if (tabsToStash.length > 0) {
       stashData = {
         id: crypto.randomUUID(),
@@ -162,21 +164,27 @@ chrome.action.onClicked.addListener(async (tab) => {
         type: stashType,
         title: groupTitle,
         color: groupColor,
-        tabs: tabsToStash.map(t => ({ 
-          title: t.title, 
-          url: t.url, 
-          favIconUrl: t.favIconUrl 
+        tabs: tabsToStash.map(t => ({
+          title: t.title,
+          url: t.url,
+          favIconUrl: t.favIconUrl
         }))
       };
     }
 
-    // Execute the stash operation
     // If stashData is null (no tabs found), processStash will just open the manager
     await processStash(stashData, tabsToStash, currentWindowId);
 
   } catch (error) {
-    console.error("Critical error in action listener:", error);
-    // Attempt to open manager as fallback
+    console.error("Critical error in handleStash:", error);
     try { await openManager(currentWindowId); } catch (e) { /* ignore */ }
   }
+};
+
+chrome.action.onClicked.addListener(handleStash);
+
+chrome.commands.onCommand.addListener(async (command) => {
+  if (command !== 'stash-tabs') return;
+  const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+  if (tab) await handleStash(tab);
 });

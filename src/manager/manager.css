@@ -309,6 +309,24 @@ button.secondary:hover { background-color: var(--btn-secondary-hover); }
 }
 .open-one-btn:hover { background: var(--surface1); color: var(--text); }
 
+.remove-tab-btn {
+  color: var(--red);
+  opacity: 0;
+  transition: opacity 0.15s;
+  font-size: 12px;
+  margin-left: 4px;
+}
+
+.link-item:hover .remove-tab-btn,
+.remove-tab-btn:focus-visible {
+  opacity: 1;
+}
+
+.remove-tab-btn:hover {
+  background-color: var(--surface1);
+  color: var(--red);
+}
+
 .edit-container {
   display: flex;
   align-items: center;

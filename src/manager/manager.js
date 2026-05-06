@@ -106,8 +106,8 @@ function createStashCard(item) {
   const ul = document.createElement('ul');
   ul.className = 'link-list';
 
-  item.tabs.forEach(tab => {
-    const li = createTabListItem(tab);
+  item.tabs.forEach((tab, idx) => {
+    const li = createTabListItem(tab, item.id, idx);
     ul.appendChild(li);
   });
 
@@ -129,7 +129,7 @@ function setCollapsed(stashId, collapsed) {
 /**
  * Creates a list item for a single tab.
  */
-function createTabListItem(tab) {
+function createTabListItem(tab, stashId, tabIndex) {
   const li = document.createElement('li');
   li.className = 'link-item';
 
@@ -150,11 +150,50 @@ function createTabListItem(tab) {
   openBtn.setAttribute('aria-label', `Open ${tab.title || tab.url}`);
   openBtn.onclick = () => chrome.tabs.create({ url: tab.url, active: false });
 
+  const removeBtn = document.createElement('button');
+  removeBtn.className = 'icon-btn remove-tab-btn';
+  removeBtn.innerHTML = '&#10005;';
+  removeBtn.setAttribute('aria-label', `Remove ${tab.title || tab.url} from stash`);
+  removeBtn.onclick = () => removeTabFromStash(stashId, tabIndex);
+
   li.appendChild(img);
   li.appendChild(a);
   li.appendChild(openBtn);
+  li.appendChild(removeBtn);
 
   return li;
+}
+
+/**
+ * Removes a single tab from a stash by its position in the tabs array.
+ * Index-based (not URL-based) so duplicate URLs in the same stash can be
+ * removed individually. If the stash has no tabs left, the entry is deleted.
+ */
+async function removeTabFromStash(stashId, tabIndex) {
+  try {
+    const items = await getStashItems();
+    const index = items.findIndex(i => i.id === stashId);
+    if (index === -1) return;
+    if (tabIndex < 0 || tabIndex >= items[index].tabs.length) return;
+
+    const removedTab = items[index].tabs[tabIndex];
+    state.undoStack.push({
+      kind: 'tab',
+      stashSnapshot: structuredClone(items[index]),
+      label: removedTab.title || removedTab.url || 'Tab'
+    });
+
+    items[index].tabs.splice(tabIndex, 1);
+
+    if (items[index].tabs.length === 0) {
+      items.splice(index, 1);
+    }
+
+    await setStashItems(items);
+    showUndoToast();
+  } catch (error) {
+    console.error("Error removing tab from stash:", error);
+  }
 }
 
 /**
@@ -420,7 +459,7 @@ async function deleteStash(id) {
     if (itemIndex === -1) return;
 
     // 2. Save it to memory (The Safety Net)
-    state.undoStack.push(items[itemIndex]);
+    state.undoStack.push({ kind: 'stash', item: items[itemIndex] });
 
     // 3. Remove it from storage immediately
     const newItems = items.filter(i => i.id !== id);
@@ -434,15 +473,20 @@ async function deleteStash(id) {
 }
 
 // Undo Toast
+function undoEntryLabel(entry) {
+  if (entry.kind === 'stash') return entry.item.title || 'Group';
+  return entry.label || 'Tab';
+}
+
 function showUndoToast() {
   const count = state.undoStack.length;
   if (count === 0) return;
 
   if (count === 1) {
-    const name = state.undoStack[0].title || "Group";
+    const name = undoEntryLabel(state.undoStack[0]);
     elements.undoMsg.textContent = `Deleted "${name.substring(0, 20)}${name.length > 20 ? '...' : ''}"`;
   } else {
-    elements.undoMsg.textContent = `${count} stashes deleted`;
+    elements.undoMsg.textContent = `${count} items deleted`;
   }
 
   if (state.undoTimeout) clearTimeout(state.undoTimeout);
@@ -461,12 +505,25 @@ function hideUndoToast() {
 }
 
 async function handleUndo() {
-  const itemToRestore = state.undoStack.pop();
-  if (!itemToRestore) return;
+  const entry = state.undoStack.pop();
+  if (!entry) return;
 
   try {
     const items = await getStashItems();
-    const newItems = [itemToRestore, ...items];
+    let newItems;
+    if (entry.kind === 'stash') {
+      newItems = [entry.item, ...items];
+    } else {
+      // Tab removal: replace the existing stash with the pre-removal snapshot,
+      // or re-insert it at the top if it was cascade-deleted (last tab gone).
+      const existing = items.findIndex(i => i.id === entry.stashSnapshot.id);
+      if (existing !== -1) {
+        items[existing] = entry.stashSnapshot;
+        newItems = items;
+      } else {
+        newItems = [entry.stashSnapshot, ...items];
+      }
+    }
     await setStashItems(newItems);
 
     // If more deletions remain in the stack, refresh the toast for the next undo;

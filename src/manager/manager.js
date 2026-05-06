@@ -92,6 +92,7 @@ async function loadStashes() {
 function createStashCard(item) {
   const card = document.createElement('div');
   card.className = 'stash-card';
+  if (isCollapsed(item.id)) card.classList.add('collapsed');
 
   const header = document.createElement('div');
   header.className = 'card-header';
@@ -112,6 +113,17 @@ function createStashCard(item) {
 
   card.appendChild(ul);
   return card;
+}
+
+const COLLAPSED_KEY_PREFIX = 'stash-collapsed:';
+
+function isCollapsed(stashId) {
+  return sessionStorage.getItem(COLLAPSED_KEY_PREFIX + stashId) === '1';
+}
+
+function setCollapsed(stashId, collapsed) {
+  if (collapsed) sessionStorage.setItem(COLLAPSED_KEY_PREFIX + stashId, '1');
+  else sessionStorage.removeItem(COLLAPSED_KEY_PREFIX + stashId);
 }
 
 /**
@@ -164,6 +176,23 @@ function formatTimestamp(timestamp) {
 function renderViewMode(container, item) {
   container.innerHTML = '';
 
+  // Collapse / Expand toggle
+  const collapseBtn = document.createElement('button');
+  collapseBtn.className = 'icon-btn collapse-btn';
+  const initiallyCollapsed = isCollapsed(item.id);
+  collapseBtn.innerHTML = initiallyCollapsed ? '&#9654;' : '&#9660;';
+  collapseBtn.setAttribute('aria-expanded', String(!initiallyCollapsed));
+  collapseBtn.setAttribute('aria-label', initiallyCollapsed ? 'Expand stash' : 'Collapse stash');
+  collapseBtn.onclick = () => {
+    const card = container.closest('.stash-card');
+    if (!card) return;
+    const nowCollapsed = card.classList.toggle('collapsed');
+    setCollapsed(item.id, nowCollapsed);
+    collapseBtn.innerHTML = nowCollapsed ? '&#9654;' : '&#9660;';
+    collapseBtn.setAttribute('aria-expanded', String(!nowCollapsed));
+    collapseBtn.setAttribute('aria-label', nowCollapsed ? 'Expand stash' : 'Collapse stash');
+  };
+
   // 1. Badge
   const badge = document.createElement('span');
   badge.className = `group-badge color-${item.color || 'grey'}`;
@@ -201,6 +230,7 @@ function renderViewMode(container, item) {
   btnDelete.onclick = () => deleteStash(item.id);
 
   // Construct
+  container.appendChild(collapseBtn);
   container.appendChild(badge);
   container.appendChild(editBtn);
   container.appendChild(meta);

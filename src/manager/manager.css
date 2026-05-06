@@ -214,6 +214,20 @@ button.secondary:hover { background-color: var(--btn-secondary-hover); }
   transition: background-color 0.3s;
 }
 
+.stash-card.collapsed .link-list {
+  display: none;
+}
+
+.stash-card.collapsed .card-header {
+  border-bottom: none;
+}
+
+.collapse-btn {
+  font-size: 12px;
+  margin-right: 4px;
+  margin-left: 0;
+}
+
 .card-header {
   padding: 12px 20px;
   display: flex;

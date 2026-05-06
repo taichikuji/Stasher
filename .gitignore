@@ -17,3 +17,6 @@ node_modules/
 dist/
 *.zip
 .fallow/
+
+# Cursor skill
+.agent_brain.md

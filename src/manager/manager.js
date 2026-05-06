@@ -517,7 +517,8 @@ async function handleExport() {
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `stasher-export-${Date.now()}.json`;
+    const dateStr = new Date().toISOString().slice(0, 10);
+    a.download = `stasher-export-${dateStr}.json`;
     a.click();
     URL.revokeObjectURL(url); // Cleanup
   } catch (error) {
@@ -530,6 +531,8 @@ async function handleExport() {
  */
 function isValidStashItem(item) {
   if (!item || typeof item !== 'object') return false;
+  // Accept numeric IDs from legacy exports; handleImport coerces them to
+  // strings so internal logic can keep treating ids uniformly.
   if (typeof item.id !== 'string' && typeof item.id !== 'number') return false;
   if (!Array.isArray(item.tabs)) return false;
   return item.tabs.every(tab =>
@@ -552,7 +555,9 @@ function handleImport(event) {
         return;
       }
 
-      const valid = importedData.filter(isValidStashItem);
+      const valid = importedData
+        .filter(isValidStashItem)
+        .map(item => (typeof item.id === 'number' ? { ...item, id: String(item.id) } : item));
       if (valid.length === 0) {
         showInfoToast('No valid stash items found in file.');
         return;

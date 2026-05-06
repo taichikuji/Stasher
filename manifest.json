@@ -16,6 +16,15 @@
   "action": {
     "default_title": "Click to Stash"
   },
+  "commands": {
+    "stash-tabs": {
+      "suggested_key": {
+        "default": "Alt+S",
+        "mac": "Alt+S"
+      },
+      "description": "Stash current tabs"
+    }
+  },
   "background": {
     "service_worker": "src/background/service-worker.js"
   },

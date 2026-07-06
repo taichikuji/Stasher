@@ -10,6 +10,18 @@ const CONFIG = {
 };
 
 const MANAGER_URL = chrome.runtime.getURL(CONFIG.MANAGER_PATH);
+let storageWriteQueue = Promise.resolve();
+
+const queueStorageWrite = (task) => {
+  const run = () => {
+    const next = storageWriteQueue.then(task, task);
+    storageWriteQueue = next.catch(() => {});
+    return next;
+  };
+  return globalThis.navigator?.locks
+    ? navigator.locks.request('stasher-storage', run)
+    : run();
+};
 
 /**
  * Updates the toolbar badge to show the current stash count.
@@ -17,7 +29,8 @@ const MANAGER_URL = chrome.runtime.getURL(CONFIG.MANAGER_PATH);
 const updateBadge = async () => {
   try {
     const result = await chrome.storage.local.get({ [CONFIG.STORAGE_KEY]: [] });
-    const count = result[CONFIG.STORAGE_KEY].length;
+    const items = Array.isArray(result[CONFIG.STORAGE_KEY]) ? result[CONFIG.STORAGE_KEY] : [];
+    const count = items.length;
     await chrome.action.setBadgeText({ text: count > 0 ? String(count) : '' });
     await chrome.action.setBadgeBackgroundColor({ color: '#1e66f5' });
   } catch (error) {
@@ -57,10 +70,12 @@ const openManager = async (windowId) => {
  */
 const saveToStorage = async (dataItem) => {
   try {
-    const result = await chrome.storage.local.get({ [CONFIG.STORAGE_KEY]: [] });
-    // Add new item to the beginning of the list
-    const newItems = [dataItem, ...result[CONFIG.STORAGE_KEY]];
-    await chrome.storage.local.set({ [CONFIG.STORAGE_KEY]: newItems });
+    await queueStorageWrite(async () => {
+      const result = await chrome.storage.local.get({ [CONFIG.STORAGE_KEY]: [] });
+      const items = Array.isArray(result[CONFIG.STORAGE_KEY]) ? result[CONFIG.STORAGE_KEY] : [];
+      // Add new item to the beginning of the list
+      await chrome.storage.local.set({ [CONFIG.STORAGE_KEY]: [dataItem, ...items] });
+    });
   } catch (error) {
     console.error("Error saving to storage:", error);
     throw error; // Re-throw to be handled by caller

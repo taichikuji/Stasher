@@ -12,7 +12,7 @@
     "contextMenus"
   ],
   "content_security_policy": {
-    "extension_pages": "script-src 'self'; object-src 'self'"
+    "extension_pages": "script-src 'self'; object-src 'none'"
   },
   "action": {
     "default_title": "Click to Stash"

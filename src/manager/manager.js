@@ -5,7 +5,11 @@ const CONFIG = {
   CHROME_COLORS: ['grey', 'blue', 'red', 'yellow', 'green', 'pink', 'purple', 'cyan', 'orange'],
   UNDO_TIMEOUT_MS: 5000,
   TOAST_DURATION_MS: 3000,
-  MAX_TITLE_LENGTH: 200
+  MAX_TITLE_LENGTH: 200,
+  MAX_IMPORT_BYTES: 1024 * 1024,
+  MAX_IMPORT_ITEMS: 1000,
+  MAX_TABS_PER_STASH: 500,
+  ALLOWED_SCHEMES: ['http:', 'https:', 'chrome-extension:']
 };
 
 // State Management
@@ -16,8 +20,44 @@ const state = {
 };
 
 // Storage Helpers
-const getStashItems = async () => (await chrome.storage.local.get({ [CONFIG.STORAGE_KEY]: [] }))[CONFIG.STORAGE_KEY];
-const setStashItems = async (items) => chrome.storage.local.set({ [CONFIG.STORAGE_KEY]: items });
+let storageWriteQueue = Promise.resolve();
+
+const getStashItems = async () => {
+  const result = await chrome.storage.local.get({ [CONFIG.STORAGE_KEY]: [] });
+  return Array.isArray(result[CONFIG.STORAGE_KEY]) ? result[CONFIG.STORAGE_KEY] : [];
+};
+
+const updateStashItems = (updater) => {
+  const run = () => {
+    const next = storageWriteQueue.then(async () => {
+      const items = await getStashItems();
+      const updated = await updater(items);
+      if (Array.isArray(updated)) {
+        await chrome.storage.local.set({ [CONFIG.STORAGE_KEY]: updated });
+      }
+      return updated;
+    });
+    storageWriteQueue = next.catch(() => {});
+    return next;
+  };
+  // ponytail: Web Locks serializes extension contexts; the promise queue is fallback.
+  return globalThis.navigator?.locks
+    ? navigator.locks.request('stasher-storage', run)
+    : run();
+};
+
+function isAllowedTabUrl(url) {
+  if (typeof url !== 'string') return false;
+  try {
+    return CONFIG.ALLOWED_SCHEMES.includes(new URL(url).protocol);
+  } catch {
+    return false;
+  }
+}
+
+function safeColor(color) {
+  return CONFIG.CHROME_COLORS.includes(color) ? color : 'grey';
+}
 
 // DOM Elements
 const elements = {
@@ -106,7 +146,9 @@ function createStashCard(item) {
   const ul = document.createElement('ul');
   ul.className = 'link-list';
 
-  item.tabs.forEach((tab, idx) => {
+  const tabs = Array.isArray(item.tabs) ? item.tabs : [];
+  tabs.forEach((tab, idx) => {
+    if (!isAllowedTabUrl(tab.url)) return;
     const li = createTabListItem(tab, item.id, idx);
     ul.appendChild(li);
   });
@@ -132,28 +174,29 @@ function setCollapsed(stashId, collapsed) {
 function createTabListItem(tab, stashId, tabIndex) {
   const li = document.createElement('li');
   li.className = 'link-item';
+  const url = tab.url;
 
   const img = document.createElement('img');
-  const faviconUrl = chrome.runtime.getURL(`_favicon/?pageUrl=${encodeURIComponent(tab.url)}&size=16`);
+  const faviconUrl = chrome.runtime.getURL(`_favicon/?pageUrl=${encodeURIComponent(url)}&size=16`);
   img.src = faviconUrl;
   img.alt = '';
 
   const a = document.createElement('a');
-  a.href = tab.url;
-  a.textContent = tab.title || tab.url;
+  a.href = url;
+  a.textContent = tab.title || url;
   a.target = '_blank';
   a.rel = 'noopener';
 
   const openBtn = document.createElement('button');
   openBtn.className = 'open-one-btn';
   openBtn.textContent = 'Open';
-  openBtn.setAttribute('aria-label', `Open ${tab.title || tab.url}`);
-  openBtn.onclick = () => chrome.tabs.create({ url: tab.url, active: false });
+  openBtn.setAttribute('aria-label', `Open ${tab.title || url}`);
+  openBtn.onclick = () => chrome.tabs.create({ url, active: false });
 
   const removeBtn = document.createElement('button');
   removeBtn.className = 'icon-btn remove-tab-btn';
   removeBtn.innerHTML = '&#10005;';
-  removeBtn.setAttribute('aria-label', `Remove ${tab.title || tab.url} from stash`);
+  removeBtn.setAttribute('aria-label', `Remove ${tab.title || url} from stash`);
   removeBtn.onclick = () => removeTabFromStash(stashId, tabIndex);
 
   li.appendChild(img);
@@ -171,26 +214,29 @@ function createTabListItem(tab, stashId, tabIndex) {
  */
 async function removeTabFromStash(stashId, tabIndex) {
   try {
-    const items = await getStashItems();
-    const index = items.findIndex(i => i.id === stashId);
-    if (index === -1) return;
-    if (tabIndex < 0 || tabIndex >= items[index].tabs.length) return;
+    let removed = false;
+    await updateStashItems(items => {
+      const index = items.findIndex(i => i.id === stashId);
+      if (index === -1 || !Array.isArray(items[index].tabs)) return null;
+      if (tabIndex < 0 || tabIndex >= items[index].tabs.length) return null;
 
-    const removedTab = items[index].tabs[tabIndex];
-    state.undoStack.push({
-      kind: 'tab',
-      stashSnapshot: structuredClone(items[index]),
-      label: removedTab.title || removedTab.url || 'Tab'
+      const removedTab = items[index].tabs[tabIndex];
+      state.undoStack.push({
+        kind: 'tab',
+        stashSnapshot: structuredClone(items[index]),
+        label: removedTab.title || removedTab.url || 'Tab'
+      });
+
+      items[index].tabs.splice(tabIndex, 1);
+
+      if (items[index].tabs.length === 0) {
+        items.splice(index, 1);
+      }
+
+      removed = true;
+      return items;
     });
-
-    items[index].tabs.splice(tabIndex, 1);
-
-    if (items[index].tabs.length === 0) {
-      items.splice(index, 1);
-    }
-
-    await setStashItems(items);
-    showUndoToast();
+    if (removed) showUndoToast();
   } catch (error) {
     console.error("Error removing tab from stash:", error);
   }
@@ -214,6 +260,7 @@ function formatTimestamp(timestamp) {
  */
 function renderViewMode(container, item) {
   container.innerHTML = '';
+  const tabs = Array.isArray(item.tabs) ? item.tabs : [];
 
   // Collapse / Expand toggle
   const collapseBtn = document.createElement('button');
@@ -234,7 +281,7 @@ function renderViewMode(container, item) {
 
   // 1. Badge
   const badge = document.createElement('span');
-  badge.className = `group-badge color-${item.color || 'grey'}`;
+  badge.className = `group-badge color-${safeColor(item.color)}`;
   badge.textContent = item.title || (item.type === 'group' ? 'Untitled Group' : 'Ungrouped Tabs');
   badge.style.cursor = 'pointer';
   badge.addEventListener('dblclick', () => renderEditMode(container, item));
@@ -250,7 +297,7 @@ function renderViewMode(container, item) {
   // 3. Metadata
   const meta = document.createElement('span');
   meta.className = 'meta-info';
-  meta.textContent = `${item.tabs.length} tabs \u2022 ${formatTimestamp(item.timestamp)}`;
+  meta.textContent = `${tabs.length} tabs \u2022 ${formatTimestamp(item.timestamp)}`;
   meta.style.marginLeft = "auto";
 
   // 4. Action Buttons
@@ -283,6 +330,7 @@ function renderViewMode(container, item) {
  */
 function renderEditMode(container, item) {
   container.innerHTML = '';
+  const itemColor = safeColor(item.color);
 
   const wrapper = document.createElement('div');
   wrapper.className = 'edit-container';
@@ -291,7 +339,7 @@ function renderEditMode(container, item) {
   const input = document.createElement('input');
   input.type = 'text';
   input.className = 'edit-input';
-  input.value = item.title;
+  input.value = typeof item.title === 'string' ? item.title : '';
   input.placeholder = "Group Name";
   input.maxLength = CONFIG.MAX_TITLE_LENGTH;
   input.setAttribute('aria-label', 'Stash title');
@@ -301,13 +349,13 @@ function renderEditMode(container, item) {
   colorPicker.className = 'color-picker';
   colorPicker.setAttribute('role', 'radiogroup');
   colorPicker.setAttribute('aria-label', 'Group color');
-  let selectedColor = item.color;
+  let selectedColor = itemColor;
 
   CONFIG.CHROME_COLORS.forEach(color => {
     const dot = document.createElement('button');
-    dot.className = `color-dot color-${color} ${color === item.color ? 'selected' : ''}`;
+    dot.className = `color-dot color-${color} ${color === itemColor ? 'selected' : ''}`;
     dot.setAttribute('role', 'radio');
-    dot.setAttribute('aria-checked', color === item.color ? 'true' : 'false');
+    dot.setAttribute('aria-checked', color === itemColor ? 'true' : 'false');
     dot.setAttribute('aria-label', color);
     dot.onclick = () => {
       // Handle selection visual
@@ -368,14 +416,13 @@ function renderEditMode(container, item) {
 
 async function updateStashData(id, newTitle, newColor) {
   try {
-    const items = await getStashItems();
-    const index = items.findIndex(i => i.id === id);
-
-    if (index !== -1) {
+    await updateStashItems(items => {
+      const index = items.findIndex(i => i.id === id);
+      if (index === -1) return null;
       items[index].title = newTitle;
-      items[index].color = newColor;
-      await setStashItems(items);
-    }
+      items[index].color = safeColor(newColor);
+      return items;
+    });
   } catch (error) {
     console.error("Error updating stash data:", error);
   }
@@ -385,13 +432,16 @@ async function restoreGroup(item) {
   let tempWindow = null; // We declare this outside to ensure we can close it later
 
   try {
+    const tabs = Array.isArray(item.tabs) ? item.tabs.filter(t => isAllowedTabUrl(t.url)) : [];
+    if (tabs.length === 0) return;
+
     // 1. Get reference to current window
     const originalWindow = await chrome.windows.getCurrent();
 
     // 2. Create Tabs (in batches of 5 to avoid overwhelming the browser)
     const tabIds = [];
-    for (let i = 0; i < item.tabs.length; i += 5) {
-      const batch = item.tabs.slice(i, i + 5);
+    for (let i = 0; i < tabs.length; i += 5) {
+      const batch = tabs.slice(i, i + 5);
       const created = await Promise.all(
         batch.map(t => chrome.tabs.create({ url: t.url, active: false }))
       );
@@ -404,8 +454,8 @@ async function restoreGroup(item) {
 
       // 4. Apply Properties
       await chrome.tabGroups.update(groupId, {
-        title: item.title,
-        color: item.color,
+        title: typeof item.title === 'string' ? item.title : '',
+        color: safeColor(item.color),
         collapsed: false
       });
 
@@ -452,21 +502,22 @@ async function restoreGroup(item) {
 
 async function deleteStash(id) {
   try {
-    // 1. Get current list to find the item we are about to delete
-    const items = await getStashItems();
-    const itemIndex = items.findIndex(i => i.id === id);
+    let deleted = false;
+    await updateStashItems(items => {
+      // 1. Get current list to find the item we are about to delete
+      const itemIndex = items.findIndex(i => i.id === id);
+      if (itemIndex === -1) return null;
 
-    if (itemIndex === -1) return;
+      // 2. Save it to memory (The Safety Net)
+      state.undoStack.push({ kind: 'stash', item: items[itemIndex] });
 
-    // 2. Save it to memory (The Safety Net)
-    state.undoStack.push({ kind: 'stash', item: items[itemIndex] });
-
-    // 3. Remove it from storage immediately
-    const newItems = items.filter(i => i.id !== id);
-    await setStashItems(newItems);
+      // 3. Remove it from storage immediately
+      deleted = true;
+      return items.filter(i => i.id !== id);
+    });
 
     // 4. Show the Undo Toast
-    showUndoToast();
+    if (deleted) showUndoToast();
   } catch (error) {
     console.error("Error deleting stash:", error);
   }
@@ -509,22 +560,20 @@ async function handleUndo() {
   if (!entry) return;
 
   try {
-    const items = await getStashItems();
-    let newItems;
-    if (entry.kind === 'stash') {
-      newItems = [entry.item, ...items];
-    } else {
-      // Tab removal: replace the existing stash with the pre-removal snapshot,
-      // or re-insert it at the top if it was cascade-deleted (last tab gone).
-      const existing = items.findIndex(i => i.id === entry.stashSnapshot.id);
-      if (existing !== -1) {
-        items[existing] = entry.stashSnapshot;
-        newItems = items;
+    await updateStashItems(items => {
+      if (entry.kind === 'stash') {
+        return [entry.item, ...items];
       } else {
-        newItems = [entry.stashSnapshot, ...items];
+        // Tab removal: replace the existing stash with the pre-removal snapshot,
+        // or re-insert it at the top if it was cascade-deleted (last tab gone).
+        const existing = items.findIndex(i => i.id === entry.stashSnapshot.id);
+        if (existing !== -1) {
+          items[existing] = entry.stashSnapshot;
+          return items;
+        }
+        return [entry.stashSnapshot, ...items];
       }
-    }
-    await setStashItems(newItems);
+    });
 
     // If more deletions remain in the stack, refresh the toast for the next undo;
     // otherwise hide it.
@@ -535,6 +584,7 @@ async function handleUndo() {
     }
   } catch (error) {
     console.error("Error undoing delete:", error);
+    state.undoStack.push(entry);
   }
 }
 
@@ -627,17 +677,37 @@ function isValidStashItem(item) {
   // Accept numeric IDs from legacy exports; handleImport coerces them to
   // strings so internal logic can keep treating ids uniformly.
   if (typeof item.id !== 'string' && typeof item.id !== 'number') return false;
-  if (!Array.isArray(item.tabs)) return false;
+  if (!Array.isArray(item.tabs) || item.tabs.length > CONFIG.MAX_TABS_PER_STASH) return false;
   return item.tabs.every(tab =>
     tab && typeof tab === 'object' &&
     typeof tab.url === 'string' &&
-    typeof tab.title === 'string'
+    typeof tab.title === 'string' &&
+    isAllowedTabUrl(tab.url)
   );
+}
+
+function normalizeImportedItem(item) {
+  return {
+    ...item,
+    id: String(item.id),
+    title: typeof item.title === 'string' ? item.title.slice(0, CONFIG.MAX_TITLE_LENGTH) : '',
+    color: safeColor(item.color),
+    type: item.type === 'group' ? 'group' : 'loose',
+    tabs: item.tabs.map(tab => ({
+      ...tab,
+      title: tab.title.slice(0, CONFIG.MAX_TITLE_LENGTH)
+    }))
+  };
 }
 
 function handleImport(event) {
   const file = event.target.files[0];
   if (!file) return;
+  if (file.size > CONFIG.MAX_IMPORT_BYTES) {
+    showInfoToast('Import file is too large.');
+    event.target.value = '';
+    return;
+  }
 
   const reader = new FileReader();
   reader.onload = async (e) => {
@@ -647,31 +717,38 @@ function handleImport(event) {
         showInfoToast('Invalid format: expected an array.');
         return;
       }
+      if (importedData.length > CONFIG.MAX_IMPORT_ITEMS) {
+        showInfoToast('Import contains too many stash items.');
+        return;
+      }
 
       const valid = importedData
         .filter(isValidStashItem)
-        .map(item => (typeof item.id === 'number' ? { ...item, id: String(item.id) } : item));
+        .map(normalizeImportedItem);
       if (valid.length === 0) {
         showInfoToast('No valid stash items found in file.');
         return;
       }
 
-      const currentItems = await getStashItems();
-      const merged = [...valid, ...currentItems];
+      let added = 0;
+      await updateStashItems(currentItems => {
+        const merged = [...valid, ...currentItems];
 
-      // Remove duplicates based on ID
-      const unique = merged.filter((v, i, a) => a.findIndex(t => (t.id === v.id)) === i);
+        // Remove duplicates based on ID
+        const unique = merged.filter((v, i, a) => a.findIndex(t => (t.id === v.id)) === i);
 
-      await setStashItems(unique);
+        added = unique.length - currentItems.length;
+        return unique;
+      });
 
-      const added = unique.length - currentItems.length;
       showInfoToast(`Imported ${added} new stash${added !== 1 ? 'es' : ''}.`);
     } catch (err) {
       console.error("Import error:", err);
       showInfoToast('Error parsing JSON file.');
+    } finally {
+      // Reset so the same file can be re-imported
+      event.target.value = '';
     }
-    // Reset so the same file can be re-imported
-    event.target.value = '';
   };
   reader.readAsText(file);
 }
@@ -681,7 +758,7 @@ async function handleDeleteAll() {
     "WARNING: This will delete ALL saved tabs and groups.\n\nAre you sure you want to proceed?"
   );
   if (confirmed) {
-    await chrome.storage.local.remove(CONFIG.STORAGE_KEY);
+    await updateStashItems(() => []);
   }
 }
 

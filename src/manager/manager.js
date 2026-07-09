@@ -185,7 +185,7 @@ function createTabListItem(tab, stashId, tabIndex) {
   a.href = url;
   a.textContent = tab.title || url;
   a.target = '_blank';
-  a.rel = 'noopener';
+  a.rel = 'noopener noreferrer';
 
   const openBtn = document.createElement('button');
   openBtn.className = 'open-one-btn';

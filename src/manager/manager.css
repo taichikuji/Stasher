@@ -56,7 +56,7 @@
   --focus-ring: var(--blue);
 }
 
-[data-theme="dark"] {
+:root[data-theme="dark"] {
   color-scheme: dark;
   /* Dark Theme (User's Dark Mode) */
   --rosewater: #f5e0dc;
@@ -116,7 +116,7 @@ body {
   margin: 0;
   padding: 20px;
   color: var(--text-main);
-  transition: none;
+  transition: background-color 0.3s, color 0.3s;
 }
 
 :focus-visible {

@@ -55,10 +55,10 @@ If you want to help me with this, I'd really appreciate it, just go ahead and dr
 
 ## What is the color palette of the project's icon?
 
-Red : #ef5b5b
-Purple: #855bef
-yellow: #efde5b
-Pink: #ffa8a8
+* Red : [#ef5b5b](https://www.color-hex.com/color/ef5b5b)
+* Purple: [#855bef](https://www.color-hex.com/color/855bef)
+* Yellow: [#efde5b](https://www.color-hex.com/color/efde5b)
+* Pink: [#ffa8a8](https://www.color-hex.com/color/ffa8a8)
 
 ---
 

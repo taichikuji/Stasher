@@ -53,6 +53,13 @@ Not at this time. Thinking about having to pay 5$ just to upload it hurts my sou
 
 If you want to help me with this, I'd really appreciate it, just go ahead and drop a coffee here: [paypal.me](https://paypal.me/ivanperezf). It helps a ton!
 
+## What is the color palette of the project's icon?
+
+Red : #ef5b5b
+Purple: #855bef
+yellow: #efde5b
+Pink: #ffa8a8
+
 ---
 
 Anyways that's it for real now. Thanks as always. If you find bugs or errors report them accordingly.

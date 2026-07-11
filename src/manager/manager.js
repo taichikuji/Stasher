@@ -777,36 +777,35 @@ function setupEventListeners() {
 }
 
 // Theme Management
-function initTheme() {
-  const savedTheme = localStorage.getItem(CONFIG.THEME_KEY);
+const systemDarkTheme = window.matchMedia('(prefers-color-scheme: dark)');
 
-  if (savedTheme) {
-    // Explicit preference saved, use it
-    applyTheme(savedTheme);
-  } else {
-    // Default to OS preference
-    const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
-    applyTheme(prefersDark ? 'dark' : 'light');
-  }
+function getSavedTheme() {
+  const theme = localStorage.getItem(CONFIG.THEME_KEY);
+  return theme === 'light' || theme === 'dark' ? theme : null;
+}
+
+function initTheme() {
+  const initialTheme = document.documentElement.getAttribute('data-theme');
+  applyTheme(initialTheme === 'dark' ? 'dark' : 'light');
+
+  systemDarkTheme.addEventListener('change', (event) => {
+    if (!getSavedTheme()) {
+      applyTheme(event.matches ? 'dark' : 'light');
+    }
+  });
 }
 
 function toggleTheme() {
-  const currentTheme = document.documentElement.getAttribute('data-theme') || 'light';
+  const currentTheme = document.documentElement.getAttribute('data-theme');
   const newTheme = currentTheme === 'dark' ? 'light' : 'dark';
   applyTheme(newTheme);
   localStorage.setItem(CONFIG.THEME_KEY, newTheme);
 }
 
 function applyTheme(theme) {
-  if (theme === 'dark') {
-    document.documentElement.setAttribute('data-theme', 'dark');
-    elements.themeToggleBtn.textContent = '🐈';
-  } else {
-    document.documentElement.removeAttribute('data-theme');
-    elements.themeToggleBtn.textContent = '🐈‍⬛';
-  }
-  // Enable smooth transitions only after the initial theme is applied
-  requestAnimationFrame(() => {
-    document.body.style.transition = 'background-color 0.3s, color 0.3s';
-  });
+  const isDark = theme === 'dark';
+  document.documentElement.setAttribute('data-theme', theme);
+  document.documentElement.style.colorScheme = theme;
+  elements.themeToggleBtn.textContent = isDark ? '🐈' : '🐈‍⬛';
+  elements.themeToggleBtn.setAttribute('aria-label', `Switch to ${isDark ? 'light' : 'dark'} theme`);
 }

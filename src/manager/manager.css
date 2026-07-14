@@ -247,16 +247,16 @@ button.secondary:hover { background-color: var(--btn-secondary-hover); }
   border: 1px solid transparent;
 }
 
-/* Chrome Tab Group Colors - Keeping these as they are semantic, but could map to theme colors if desired */
-.color-grey   { background-color: #dadce0; color: #202124; } /* Grey 900 text */
-.color-blue   { background-color: #8ab4f8; color: #174ea6; } /* Blue 900 text */
-.color-red    { background-color: #f28b82; color: #a50e0e; } /* Red 900 text */
-.color-yellow { background-color: #fdd663; color: #e37400; } /* Yellow 900 text */
-.color-green  { background-color: #81c995; color: #0d652d; } /* Green 900 text */
-.color-pink   { background-color: #ff8bcb; color: #b80672; } /* Pink 900 text */
-.color-purple { background-color: #c58af9; color: #681da8; } /* Purple 900 text */
-.color-cyan   { background-color: #78d9ec; color: #007b83; } /* Cyan 900 text */
-.color-orange { background-color: #fcad70; color: #b06000; } /* Orange 900 text */
+/* Chrome 150 Tab Group Color Refresh saved-group chips */
+.color-grey   { background-color: light-dark(#d0d5dd80, #494d5280); color: light-dark(#494d52, #d0d5dd); }
+.color-blue   { background-color: light-dark(#c8d3ff80, #325ccd80); color: light-dark(#325ccd, #c8d3ff); }
+.color-red    { background-color: light-dark(#ffc7c180, #df000c80); color: light-dark(#df000c, #ffc7c1); }
+.color-yellow { background-color: light-dark(#eeffa580, #63750580); color: light-dark(#637505, #eeffa5); }
+.color-green  { background-color: light-dark(#c6ffc780, #1a773680); color: light-dark(#1a7736, #c6ffc7); }
+.color-pink   { background-color: light-dark(#ffc3e880, #cc06ab80); color: light-dark(#cc06ab, #ffc3e8); }
+.color-purple { background-color: light-dark(#e0cbff80, #7c31e680); color: light-dark(#7c31e6, #e0cbff); }
+.color-cyan   { background-color: light-dark(#c7faff80, #057c8480); color: light-dark(#057c84, #c7faff); }
+.color-orange { background-color: light-dark(#ffdea780, #cc4e0080); color: light-dark(#cc4e00, #ffdea7); }
 
 .card-actions button {
   font-size: 12px;

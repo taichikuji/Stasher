@@ -4,45 +4,44 @@
 
 :root {
   color-scheme: light;
-  /* Light Theme (User's White Theme) */
-  --rosewater: #dc8a78;
-  --flamingo: #dd7878;
-  --pink: #ea76cb;
-  --mauve: #8839ef;
-  --red: #d20f39;
-  --maroon: #e64553;
-  --peach: #fe640b;
-  --yellow: #df8e1d;
-  --green: #40a02b;
-  --teal: #179299;
-  --sky: #04a5e5;
-  --sapphire: #209fb5;
-  --blue: #1e66f5;
-  --lavender: #7287fd;
-  --text: #4c4f69;
-  --subtext1: #5c5f77;
-  --subtext0: #6c6f85;
-  --overlay2: #7c7f93;
-  --overlay1: #8c8fa1;
-  --overlay0: #9ca0b0;
-  --surface2: #acb0be;
-  --surface1: #bcc0cc;
-  --surface0: #ccd0da;
-  --base: #eff1f5;
-  --mantle: #e6e9ef;
-  --crust: #dce0e8;
+  --rosewater: light-dark(#dc8a78, #f5e0dc);
+  --flamingo: light-dark(#dd7878, #f2cdcd);
+  --pink: light-dark(#ea76cb, #f5c2e7);
+  --mauve: light-dark(#8839ef, #cba6f7);
+  --red: light-dark(#d20f39, #f38ba8);
+  --maroon: light-dark(#e64553, #eba0ac);
+  --peach: light-dark(#fe640b, #fab387);
+  --yellow: light-dark(#df8e1d, #f9e2af);
+  --green: light-dark(#40a02b, #a6e3a1);
+  --teal: light-dark(#179299, #94e2d5);
+  --sky: light-dark(#04a5e5, #89dceb);
+  --sapphire: light-dark(#209fb5, #74c7ec);
+  --blue: light-dark(#1e66f5, #89b4fa);
+  --lavender: light-dark(#7287fd, #b4befe);
+  --text: light-dark(#4c4f69, #cdd6f4);
+  --subtext1: light-dark(#5c5f77, #bac2de);
+  --subtext0: light-dark(#6c6f85, #a6adc8);
+  --overlay2: light-dark(#7c7f93, #9399b2);
+  --overlay1: light-dark(#8c8fa1, #7f849c);
+  --overlay0: light-dark(#9ca0b0, #6c7086);
+  --surface2: light-dark(#acb0be, #585b70);
+  --surface1: light-dark(#bcc0cc, #45475a);
+  --surface0: light-dark(#ccd0da, #313244);
+  --base: light-dark(#eff1f5, #1e1e2e);
+  --mantle: light-dark(#e6e9ef, #181825);
+  --crust: light-dark(#dce0e8, #11111b);
 
   --bg-body: var(--base);
-  --bg-card: #ffffff;
+  --bg-card: light-dark(#ffffff, var(--mantle));
   --text-main: var(--text);
   --text-muted: var(--subtext0);
   --border-color: var(--surface0);
-  --input-bg: #ffffff;
-  --input-border: var(--overlay0);
-  --shadow-color: rgba(0,0,0,0.1);
+  --input-bg: light-dark(#ffffff, var(--base));
+  --input-border: light-dark(var(--overlay0), var(--surface1));
+  --shadow-color: light-dark(rgba(0,0,0,0.1), rgba(0,0,0,0.3));
   --btn-primary: var(--blue);
   --btn-primary-hover: var(--sapphire);
-  --btn-text: #ffffff;
+  --btn-text: light-dark(#ffffff, var(--base));
   --btn-danger: var(--red);
   --btn-danger-hover: var(--maroon);
   --btn-secondary: var(--surface0);
@@ -51,63 +50,13 @@
   --link-color: var(--text);
   --link-hover: var(--blue);
   --icon-color: var(--text);
-  --toast-bg: var(--text);
-  --toast-text: var(--base);
-  --focus-ring: var(--blue);
+  --toast-bg: light-dark(var(--text), var(--surface0));
+  --toast-text: light-dark(var(--base), var(--text));
+  --focus-ring: light-dark(var(--blue), var(--lavender));
 }
 
 :root[data-theme="dark"] {
   color-scheme: dark;
-  /* Dark Theme (User's Dark Mode) */
-  --rosewater: #f5e0dc;
-  --flamingo: #f2cdcd;
-  --pink: #f5c2e7;
-  --mauve: #cba6f7;
-  --red: #f38ba8;
-  --maroon: #eba0ac;
-  --peach: #fab387;
-  --yellow: #f9e2af;
-  --green: #a6e3a1;
-  --teal: #94e2d5;
-  --sky: #89dceb;
-  --sapphire: #74c7ec;
-  --blue: #89b4fa;
-  --lavender: #b4befe;
-  --text: #cdd6f4;
-  --subtext1: #bac2de;
-  --subtext0: #a6adc8;
-  --overlay2: #9399b2;
-  --overlay1: #7f849c;
-  --overlay0: #6c7086;
-  --surface2: #585b70;
-  --surface1: #45475a;
-  --surface0: #313244;
-  --base: #1e1e2e;
-  --mantle: #181825;
-  --crust: #11111b;
-
-  --bg-body: var(--base);
-  --bg-card: var(--mantle);
-  --text-main: var(--text);
-  --text-muted: var(--subtext0);
-  --border-color: var(--surface0);
-  --input-bg: var(--base);
-  --input-border: var(--surface1);
-  --shadow-color: rgba(0,0,0,0.3);
-  --btn-primary: var(--blue);
-  --btn-primary-hover: var(--sapphire);
-  --btn-text: var(--base);
-  --btn-danger: var(--red);
-  --btn-danger-hover: var(--maroon);
-  --btn-secondary: var(--surface0);
-  --btn-secondary-hover: var(--surface1);
-  --btn-secondary-text: var(--text);
-  --link-color: var(--text);
-  --link-hover: var(--blue);
-  --icon-color: var(--text);
-  --toast-bg: var(--surface0);
-  --toast-text: var(--text);
-  --focus-ring: var(--lavender);
 }
 
 body {

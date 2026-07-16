@@ -40,7 +40,6 @@ const updateStashItems = (updater) => {
     storageWriteQueue = next.catch(() => {});
     return next;
   };
-  // ponytail: Web Locks serializes extension contexts; the promise queue is fallback.
   return globalThis.navigator?.locks
     ? navigator.locks.request('stasher-storage', run)
     : run();
@@ -109,13 +108,7 @@ async function loadStashes() {
       return;
     }
 
-    // Render each stash item
-    const fragment = document.createDocumentFragment();
-    items.forEach(item => {
-      const card = createStashCard(item);
-      fragment.appendChild(card);
-    });
-    elements.container.appendChild(fragment);
+    elements.container.append(...items.map(createStashCard));
 
   } catch (error) {
     console.error("Error loading stashes:", error);
@@ -141,8 +134,6 @@ function createStashCard(item) {
   // Start in View Mode
   renderViewMode(header, item);
 
-  card.appendChild(header);
-
   const ul = document.createElement('ul');
   ul.className = 'link-list';
 
@@ -153,7 +144,7 @@ function createStashCard(item) {
     ul.appendChild(li);
   });
 
-  card.appendChild(ul);
+  card.append(header, ul);
   return card;
 }
 
@@ -190,7 +181,8 @@ function createTabListItem(tab, stashId, tabIndex) {
   const openBtn = document.createElement('button');
   openBtn.className = 'open-one-btn';
   openBtn.textContent = 'Open';
-  openBtn.setAttribute('aria-label', `Open ${tab.title || url}`);
+  openBtn.title = 'Open in background';
+  openBtn.setAttribute('aria-label', `Open ${tab.title || url} in background`);
   openBtn.onclick = () => chrome.tabs.create({ url, active: false });
 
   const removeBtn = document.createElement('button');
@@ -199,10 +191,7 @@ function createTabListItem(tab, stashId, tabIndex) {
   removeBtn.setAttribute('aria-label', `Remove ${tab.title || url} from stash`);
   removeBtn.onclick = () => removeTabFromStash(stashId, tabIndex);
 
-  li.appendChild(img);
-  li.appendChild(a);
-  li.appendChild(openBtn);
-  li.appendChild(removeBtn);
+  li.append(img, a, openBtn, removeBtn);
 
   return li;
 }
@@ -315,14 +304,8 @@ function renderViewMode(container, item) {
   btnDelete.setAttribute('aria-label', `Delete ${item.title || 'stash'}`);
   btnDelete.onclick = () => deleteStash(item.id);
 
-  // Construct
-  container.appendChild(collapseBtn);
-  container.appendChild(badge);
-  container.appendChild(editBtn);
-  container.appendChild(meta);
-  actions.appendChild(btnRestore);
-  actions.appendChild(btnDelete);
-  container.appendChild(actions);
+  actions.append(btnRestore, btnDelete);
+  container.append(collapseBtn, badge, editBtn, meta, actions);
 }
 
 /**
@@ -407,10 +390,7 @@ function renderEditMode(container, item) {
   // Re-fetch clean data to revert changes
   cancelBtn.onclick = handleCancel;
 
-  wrapper.appendChild(input);
-  wrapper.appendChild(colorPicker);
-  wrapper.appendChild(saveBtn);
-  wrapper.appendChild(cancelBtn);
+  wrapper.append(input, colorPicker, saveBtn, cancelBtn);
   container.appendChild(wrapper);
 }
 
@@ -612,8 +592,7 @@ function showConfirmModal(message) {
     elements.confirmTitle.textContent = message;
     elements.confirmModal.classList.remove('hidden');
 
-    // Set initial focus
-    elements.confirmOk.focus();
+    elements.confirmCancel.focus();
 
     const cleanup = (result) => {
       elements.confirmModal.classList.add('hidden');

@@ -9,6 +9,27 @@
   <link rel="stylesheet" type="text/css" href="manager.css">
 </head>
 <body>
+  <svg class="icon-sprite" aria-hidden="true">
+    <symbol id="icon-chevron-down" viewBox="0 0 24 24">
+      <path d="m6 9 6 6 6-6" />
+    </symbol>
+    <symbol id="icon-chevron-right" viewBox="0 0 24 24">
+      <path d="m9 18 6-6-6-6" />
+    </symbol>
+    <symbol id="icon-pencil" viewBox="0 0 24 24">
+      <path d="M12 20h9" />
+      <path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z" />
+    </symbol>
+    <symbol id="icon-check" viewBox="0 0 24 24">
+      <path d="m5 12 4 4L19 6" />
+    </symbol>
+    <symbol id="icon-x" viewBox="0 0 24 24">
+      <path d="M18 6 6 18M6 6l12 12" />
+    </symbol>
+    <symbol id="icon-trash" viewBox="0 0 24 24">
+      <path d="M3 6h18M8 6V4h8v2m3 0-1 14H6L5 6m5 4v6m4-6v6" />
+    </symbol>
+  </svg>
 
   <header class="header">
     <h1>
@@ -22,7 +43,8 @@
       <button id="exportBtn">Export</button>
       <input type="file" id="importFile" accept=".json" class="visually-hidden">
       <button id="importBtn">Import</button>
-      <button id="deleteAllBtn" class="danger">Delete ALL</button>
+      <span class="toolbar-separator" aria-hidden="true"></span>
+      <button id="deleteAllBtn" class="danger">Delete All Stashes</button>
     </div>
   </header>
 
@@ -32,12 +54,16 @@
   <div id="undo-toast" class="undo-toast hidden" role="alert">
     <span id="undo-msg">Item deleted</span>
     <button id="undo-btn">UNDO</button>
-    <button id="close-toast" class="icon-btn" aria-label="Dismiss notification">✕</button>
+    <button id="close-toast" class="icon-btn" aria-label="Dismiss notification">
+      <svg class="button-icon" aria-hidden="true"><use href="#icon-x" /></svg>
+    </button>
   </div>
 
   <div id="info-toast" class="undo-toast hidden" role="status">
     <span id="info-msg"></span>
-    <button id="close-info-toast" class="icon-btn" aria-label="Dismiss notification">✕</button>
+    <button id="close-info-toast" class="icon-btn" aria-label="Dismiss notification">
+      <svg class="button-icon" aria-hidden="true"><use href="#icon-x" /></svg>
+    </button>
   </div>
 
   <!-- Confirmation modal (replaces native confirm/alert) -->
@@ -45,8 +71,8 @@
     <div class="modal-box">
       <p id="confirm-title"></p>
       <div class="modal-actions">
-        <button id="confirm-ok" class="danger">Confirm</button>
         <button id="confirm-cancel" class="secondary">Cancel</button>
+        <button id="confirm-ok" class="danger">Delete All Stashes</button>
       </div>
     </div>
   </div>

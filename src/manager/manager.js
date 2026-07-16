@@ -40,7 +40,6 @@ const updateStashItems = (updater) => {
     storageWriteQueue = next.catch(() => {});
     return next;
   };
-  // Web Locks serializes extension contexts; the promise queue is the fallback.
   return globalThis.navigator?.locks
     ? navigator.locks.request('stasher-storage', run)
     : run();
@@ -79,20 +78,6 @@ const elements = {
   confirmOk: document.getElementById('confirm-ok'),
   confirmCancel: document.getElementById('confirm-cancel')
 };
-
-function createIcon(name) {
-  const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
-  const use = document.createElementNS('http://www.w3.org/2000/svg', 'use');
-  svg.classList.add('button-icon');
-  svg.setAttribute('aria-hidden', 'true');
-  use.setAttribute('href', `#icon-${name}`);
-  svg.appendChild(use);
-  return svg;
-}
-
-function setButtonIcon(button, name) {
-  button.replaceChildren(createIcon(name));
-}
 
 // Initial Load
 document.addEventListener('DOMContentLoaded', () => {
@@ -210,7 +195,7 @@ function createTabListItem(tab, stashId, tabIndex) {
 
   const removeBtn = document.createElement('button');
   removeBtn.className = 'icon-btn remove-tab-btn';
-  setButtonIcon(removeBtn, 'trash');
+  removeBtn.innerHTML = '&#10005;';
   removeBtn.setAttribute('aria-label', `Remove ${tab.title || url} from stash`);
   removeBtn.onclick = () => removeTabFromStash(stashId, tabIndex);
 
@@ -281,7 +266,7 @@ function renderViewMode(container, item) {
   const collapseBtn = document.createElement('button');
   collapseBtn.className = 'icon-btn collapse-btn';
   const initiallyCollapsed = isCollapsed(item.id);
-  setButtonIcon(collapseBtn, initiallyCollapsed ? 'chevron-right' : 'chevron-down');
+  collapseBtn.innerHTML = initiallyCollapsed ? '&#9654;' : '&#9660;';
   collapseBtn.setAttribute('aria-expanded', String(!initiallyCollapsed));
   collapseBtn.setAttribute('aria-label', initiallyCollapsed ? 'Expand stash' : 'Collapse stash');
   collapseBtn.onclick = () => {
@@ -289,7 +274,7 @@ function renderViewMode(container, item) {
     if (!card) return;
     const nowCollapsed = card.classList.toggle('collapsed');
     setCollapsed(item.id, nowCollapsed);
-    setButtonIcon(collapseBtn, nowCollapsed ? 'chevron-right' : 'chevron-down');
+    collapseBtn.innerHTML = nowCollapsed ? '&#9654;' : '&#9660;';
     collapseBtn.setAttribute('aria-expanded', String(!nowCollapsed));
     collapseBtn.setAttribute('aria-label', nowCollapsed ? 'Expand stash' : 'Collapse stash');
   };
@@ -304,7 +289,7 @@ function renderViewMode(container, item) {
   // 2. Edit Pencil Button
   const editBtn = document.createElement('button');
   editBtn.className = 'icon-btn';
-  setButtonIcon(editBtn, 'pencil');
+  editBtn.innerHTML = '&#9998;';
   editBtn.title = 'Edit Title & Color';
   editBtn.setAttribute('aria-label', 'Edit title and color');
   editBtn.onclick = () => renderEditMode(container, item);
@@ -410,14 +395,14 @@ function renderEditMode(container, item) {
   // 3. Save Button
   const saveBtn = document.createElement('button');
   saveBtn.className = 'icon-btn save-btn';
-  setButtonIcon(saveBtn, 'check');
+  saveBtn.innerHTML = '&#10004;';
   saveBtn.setAttribute('aria-label', 'Save changes');
   saveBtn.onclick = handleSave;
 
   // 4. Cancel Button
   const cancelBtn = document.createElement('button');
   cancelBtn.className = 'icon-btn cancel-btn';
-  setButtonIcon(cancelBtn, 'x');
+  cancelBtn.innerHTML = '&#10006;';
   cancelBtn.setAttribute('aria-label', 'Cancel editing');
   // Re-fetch clean data to revert changes
   cancelBtn.onclick = handleCancel;
@@ -619,16 +604,14 @@ function hideInfoToast() {
 }
 
 // Confirm Modal (replaces native confirm)
-function showConfirmModal(message, confirmLabel = 'Confirm') {
+function showConfirmModal(message) {
   return new Promise((resolve) => {
     // Remember what element was focused before the modal opened
     const previousFocus = document.activeElement;
 
     elements.confirmTitle.textContent = message;
-    elements.confirmOk.textContent = confirmLabel;
     elements.confirmModal.classList.remove('hidden');
 
-    // Default to the safe action for destructive confirmations
     elements.confirmCancel.focus();
 
     const cleanup = (result) => {
@@ -771,8 +754,7 @@ function handleImport(event) {
 
 async function handleDeleteAll() {
   const confirmed = await showConfirmModal(
-    "WARNING: This will delete ALL saved tabs and groups.\n\nAre you sure you want to proceed?",
-    'Delete All Stashes'
+    "WARNING: This will delete ALL saved tabs and groups.\n\nAre you sure you want to proceed?"
   );
   if (confirmed) {
     await updateStashItems(() => []);

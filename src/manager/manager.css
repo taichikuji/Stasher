@@ -92,24 +92,6 @@ body {
   border: 0;
 }
 
-.icon-sprite {
-  position: absolute;
-  width: 0;
-  height: 0;
-  overflow: hidden;
-}
-
-.button-icon {
-  display: block;
-  width: 1em;
-  height: 1em;
-  fill: none;
-  stroke: currentColor;
-  stroke-width: 2;
-  stroke-linecap: round;
-  stroke-linejoin: round;
-}
-
 .empty-state {
   text-align: center;
   padding: 20px;
@@ -139,18 +121,6 @@ body {
   width: 28px;
   margin-right: 12px;
   vertical-align: middle;
-}
-
-.controls {
-  display: flex;
-  align-items: center;
-}
-
-.toolbar-separator {
-  align-self: stretch;
-  width: 1px;
-  margin-left: 20px;
-  background-color: var(--border-color);
 }
 
 button {
@@ -412,13 +382,11 @@ button.secondary:hover { background-color: var(--btn-secondary-hover); }
 #undo-btn:hover { background-color: rgba(255,255,255,0.1); border-radius: 4px; }
 
 /* Close X */
-#close-toast,
-#close-info-toast {
+#close-toast {
   color: var(--subtext0);
   font-size: 14px;
 }
-#close-toast:hover,
-#close-info-toast:hover { color: var(--text-main); background: none; }
+#close-toast:hover { color: var(--text-main); background: none; }
 
 /* Confirmation Modal */
 .modal-overlay {
@@ -469,6 +437,7 @@ button.secondary:hover { background-color: var(--btn-secondary-hover); }
   }
 
   .controls {
+    display: flex;
     flex-wrap: wrap;
     justify-content: center;
     gap: 6px;
@@ -476,12 +445,6 @@ button.secondary:hover { background-color: var(--btn-secondary-hover); }
 
   .controls button {
     margin-left: 0;
-  }
-
-  .toolbar-separator {
-    width: 100%;
-    height: 1px;
-    margin: 4px 0;
   }
 
   .card-header {

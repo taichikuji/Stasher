@@ -409,16 +409,11 @@ async function updateStashData(id, newTitle, newColor) {
 }
 
 async function restoreGroup(item) {
-  let tempWindow = null; // We declare this outside to ensure we can close it later
-
   try {
     const tabs = Array.isArray(item.tabs) ? item.tabs.filter(t => isAllowedTabUrl(t.url)) : [];
     if (tabs.length === 0) return;
 
-    // 1. Get reference to current window
-    const originalWindow = await chrome.windows.getCurrent();
-
-    // 2. Create Tabs (in batches of 5 to avoid overwhelming the browser)
+    // 1. Create Tabs (in batches of 5 to avoid overwhelming the browser)
     const tabIds = [];
     for (let i = 0; i < tabs.length; i += 5) {
       const batch = tabs.slice(i, i + 5);
@@ -429,54 +424,25 @@ async function restoreGroup(item) {
     }
 
     if (item.type === 'group') {
-      // 3. Create Group
+      // 2. Create Group
       const groupId = await chrome.tabs.group({ tabIds });
 
-      // 4. Apply Properties
+      // 3. Apply Properties
       await chrome.tabGroups.update(groupId, {
         title: typeof item.title === 'string' ? item.title : '',
         color: safeColor(item.color),
         collapsed: false
       });
 
-      // The whole reason for the creation of this extension is due to Chromium browsers recently
-      // Unable to properly render tab groups, titles and colors until clicked while using other
-      // Tab managers, such as OneTab. As such, we had to come up with a workaround.
-
-      // It's dirty. But works.
-
-      // A. Create a minimized helper window in the background
-      tempWindow = await chrome.windows.create({
-        type: 'normal',
-        focused: false,      // Don't steal focus from the user
-        state: 'minimized'   // Keep it in the taskbar
-      });
-
-      // B. Move the group to the hidden window
-      // This forces the "Rebuild" of the UI widget
-      await chrome.tabGroups.move(groupId, { windowId: tempWindow.id, index: -1 });
-
-      // C. Tiny delay to let the OS register the move
-      await new Promise(r => setTimeout(r, 100));
-
-      // D. Move it BACK to your main window
-      await chrome.tabGroups.move(groupId, { windowId: originalWindow.id, index: -1 });
-
-      // E. Re-focus the original window (just in case)
-      await chrome.windows.update(originalWindow.id, { focused: true });
+      // Chrome 145 workaround: see fc42161032708ada098ab69c095ec945823fcffe; its removal is the following commit.
     }
 
-    // 5. Cleanup Storage
+    // 4. Cleanup Storage
     // We do not fully await this because we want to delete it in the background while the user sees their tabs
     deleteStash(item.id).catch(err => console.error("Error deleting after restore:", err));
 
   } catch (error) {
     console.error("Error restoring group:", error);
-  } finally {
-    // 6. Always close the temp window, even if errors occurred
-    if (tempWindow) {
-      await chrome.windows.remove(tempWindow.id);
-    }
   }
 }
 

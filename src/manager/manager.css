@@ -197,20 +197,24 @@ button.secondary:hover { background-color: var(--btn-secondary-hover); }
   border-radius: 16px;
   font-weight: bold;
   font-size: 14px;
-  color: var(--text); /* Was #3c4043 */
+  color: var(--group-color);
+  background-color: light-dark(
+    color-mix(in srgb, var(--group-color) 14.9%, var(--bg-card)),
+    color-mix(in srgb, var(--group-color) 24.7%, var(--bg-card))
+  );
   border: 1px solid transparent;
 }
 
-/* Chrome 150 Tab Group Color Refresh saved-group chips */
-.color-grey   { background-color: light-dark(#d0d5dd80, #494d5280); color: light-dark(#494d52, #d0d5dd); }
-.color-blue   { background-color: light-dark(#c8d3ff80, #325ccd80); color: light-dark(#325ccd, #c8d3ff); }
-.color-red    { background-color: light-dark(#ffc7c180, #df000c80); color: light-dark(#df000c, #ffc7c1); }
-.color-yellow { background-color: light-dark(#eeffa580, #63750580); color: light-dark(#637505, #eeffa5); }
-.color-green  { background-color: light-dark(#c6ffc780, #1a773680); color: light-dark(#1a7736, #c6ffc7); }
-.color-pink   { background-color: light-dark(#ffc3e880, #cc06ab80); color: light-dark(#cc06ab, #ffc3e8); }
-.color-purple { background-color: light-dark(#e0cbff80, #7c31e680); color: light-dark(#7c31e6, #e0cbff); }
-.color-cyan   { background-color: light-dark(#c7faff80, #057c8480); color: light-dark(#057c84, #c7faff); }
-.color-orange { background-color: light-dark(#ffdea780, #cc4e0080); color: light-dark(#cc4e00, #ffdea7); }
+/* Chromium group colors; Brave blends these over inactive tabs. */
+.color-grey   { --group-color: light-dark(#5f6368, #dadce0); }
+.color-blue   { --group-color: light-dark(#1a73e8, #8ab4f8); }
+.color-red    { --group-color: light-dark(#d93025, #f28b82); }
+.color-yellow { --group-color: light-dark(#f9ab00, #fdd663); }
+.color-green  { --group-color: light-dark(#188038, #81c995); }
+.color-pink   { --group-color: light-dark(#d01884, #ff8bcb); }
+.color-purple { --group-color: light-dark(#a142f4, #c58af9); }
+.color-cyan   { --group-color: light-dark(#007b83, #78d9ec); }
+.color-orange { --group-color: light-dark(#fa903e, #fcad70); }
 
 .card-actions button {
   font-size: 12px;
@@ -310,16 +314,15 @@ button.secondary:hover { background-color: var(--btn-secondary-hover); }
   border-radius: 50%;
   cursor: pointer;
   border: 2px solid transparent;
-  opacity: 0.6;
+  background-color: var(--group-color);
   padding: 0;
   font-size: 0;
   margin-left: 0;
 }
 
-.color-dot:hover { opacity: 1; transform: scale(1.1); }
+.color-dot:hover { background-color: var(--group-color); transform: scale(1.1); }
 .color-dot.selected {
   border-color: var(--text-main);
-  opacity: 1;
   transform: scale(1.1);
 }
 

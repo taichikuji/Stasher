@@ -137,6 +137,7 @@ button.danger:hover { background-color: var(--btn-danger-hover); }
 button.secondary { background-color: var(--btn-secondary); color: var(--btn-secondary-text); }
 button.secondary:hover { background-color: var(--btn-secondary-hover); }
 
+/* Cat easter egg */
 #catBtn {
   background: transparent;
   padding: 8px;

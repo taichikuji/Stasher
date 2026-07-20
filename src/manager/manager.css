@@ -3,7 +3,7 @@
 }
 
 :root {
-  color-scheme: light;
+  color-scheme: light dark;
   --rosewater: light-dark(#dc8a78, #f5e0dc);
   --flamingo: light-dark(#dd7878, #f2cdcd);
   --pink: light-dark(#ea76cb, #f5c2e7);
@@ -53,10 +53,6 @@
   --toast-bg: light-dark(var(--text), var(--surface0));
   --toast-text: light-dark(var(--base), var(--text));
   --focus-ring: light-dark(var(--blue), var(--lavender));
-}
-
-:root[data-theme="dark"] {
-  color-scheme: dark;
 }
 
 body {
@@ -141,16 +137,24 @@ button.danger:hover { background-color: var(--btn-danger-hover); }
 button.secondary { background-color: var(--btn-secondary); color: var(--btn-secondary-text); }
 button.secondary:hover { background-color: var(--btn-secondary-hover); }
 
-/* Theme Toggle Button specific styles if needed */
-#themeToggleBtn {
-  background-color: transparent;
+#catBtn {
+  background: transparent;
   padding: 8px;
   font-size: 20px;
-  line-height: 1;
 }
-#themeToggleBtn:hover {
-  background-color: var(--surface1);
+
+#catBtn:hover {
+  background: var(--surface1);
   transform: scale(1.1);
+}
+
+.pet-cat {
+  position: fixed;
+  z-index: 999;
+  font-size: 2rem;
+  line-height: 1;
+  pointer-events: none;
+  transform: translate(-50%, -50%);
 }
 
 .stash-card {

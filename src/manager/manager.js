@@ -4,7 +4,6 @@ const CONFIG = {
   CHROME_COLORS: ['grey', 'blue', 'red', 'yellow', 'green', 'pink', 'purple', 'cyan', 'orange'],
   UNDO_TIMEOUT_MS: 5000,
   TOAST_DURATION_MS: 3000,
-  CAT_TIMEOUT_MS: 3000,
   MAX_TITLE_LENGTH: 200,
   MAX_IMPORT_BYTES: 1024 * 1024,
   MAX_IMPORT_ITEMS: 1000,
@@ -16,8 +15,7 @@ const CONFIG = {
 const state = {
   undoStack: [],
   undoTimeout: null,
-  infoTimeout: null,
-  catTimeout: null
+  infoTimeout: null
 };
 
 // Storage Helpers
@@ -70,7 +68,6 @@ const elements = {
   infoMsg: document.getElementById('info-msg'),
   closeInfoToastBtn: document.getElementById('close-info-toast'),
   deleteAllBtn: document.getElementById('deleteAllBtn'),
-  catBtn: document.getElementById('catBtn'),
   exportBtn: document.getElementById('exportBtn'),
   importBtn: document.getElementById('importBtn'),
   importFile: document.getElementById('importFile'),
@@ -707,24 +704,6 @@ async function handleDeleteAll() {
   }
 }
 
-const cats = ['🐈', '🐈‍⬛'];
-let catCount = 0;
-
-function releaseCat() {
-  const cat = document.createElement('span');
-  cat.className = 'pet-cat';
-  cat.textContent = cats[catCount++ % cats.length];
-  cat.setAttribute('aria-hidden', 'true');
-  cat.style.left = `${5 + Math.random() * 90}%`;
-  cat.style.top = `${5 + Math.random() * 90}%`;
-  document.body.append(cat);
-
-  clearTimeout(state.catTimeout);
-  state.catTimeout = setTimeout(() => {
-    document.querySelectorAll('.pet-cat').forEach((cat) => cat.remove());
-  }, CONFIG.CAT_TIMEOUT_MS);
-}
-
 function setupEventListeners() {
   // Toast Listeners
   elements.undoBtn.onclick = handleUndo;
@@ -733,8 +712,33 @@ function setupEventListeners() {
 
   // Global Actions
   elements.deleteAllBtn.onclick = handleDeleteAll;
-  elements.catBtn.onclick = releaseCat;
   elements.exportBtn.onclick = handleExport;
   elements.importBtn.onclick = () => elements.importFile.click();
   elements.importFile.onchange = handleImport;
 }
+
+// Cat easter egg — deliberately isolated from application logic.
+(() => {
+  const cats = ['🐈', '🐈‍⬛'];
+  let count = 0;
+  let timeout;
+
+  function shoo() {
+    const cat = document.querySelector('.pet-cat');
+    if (!cat) return;
+    cat.remove();
+    timeout = setTimeout(shoo, 100);
+  }
+
+  document.getElementById('catBtn').onclick = () => {
+    const cat = document.createElement('span');
+    cat.className = 'pet-cat';
+    cat.textContent = cats[count++ % cats.length];
+    cat.setAttribute('aria-hidden', 'true');
+    cat.style.left = `${5 + Math.random() * 90}%`;
+    cat.style.top = `${5 + Math.random() * 90}%`;
+    document.body.append(cat);
+    clearTimeout(timeout);
+    timeout = setTimeout(shoo, 3000);
+  };
+})();

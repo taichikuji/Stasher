@@ -84,9 +84,8 @@ Stasher is a dependency-free Manifest V3 browser extension:
 - `manifest.json`: Extension metadata, permissions, commands, and entry points
 - `src/background/service-worker.js`: Tab stashing, toolbar, shortcut, context menu, and storage behavior
 - `src/manager/manager.html`: Manager page structure
-- `src/manager/manager.js`: Stash management, import/export, undo, and theme behavior
-- `src/manager/manager.css`: Manager page styles
-- `src/manager/theme-init.js`: Initial theme setup
+- `src/manager/manager.js`: Stash management, import/export, and undo behavior
+- `src/manager/manager.css`: Manager page styles and system theme colors
 - `assets/`: Extension icons and other static assets
 - `.github/`: GitHub templates and configuration
 

@@ -1,10 +1,10 @@
 // Constants and Configuration
 const CONFIG = {
   STORAGE_KEY: 'stashedItems',
-  THEME_KEY: 'themePreference',
   CHROME_COLORS: ['grey', 'blue', 'red', 'yellow', 'green', 'pink', 'purple', 'cyan', 'orange'],
   UNDO_TIMEOUT_MS: 5000,
   TOAST_DURATION_MS: 3000,
+  CAT_TIMEOUT_MS: 3000,
   MAX_TITLE_LENGTH: 200,
   MAX_IMPORT_BYTES: 1024 * 1024,
   MAX_IMPORT_ITEMS: 1000,
@@ -16,7 +16,8 @@ const CONFIG = {
 const state = {
   undoStack: [],
   undoTimeout: null,
-  infoTimeout: null
+  infoTimeout: null,
+  catTimeout: null
 };
 
 // Storage Helpers
@@ -69,7 +70,7 @@ const elements = {
   infoMsg: document.getElementById('info-msg'),
   closeInfoToastBtn: document.getElementById('close-info-toast'),
   deleteAllBtn: document.getElementById('deleteAllBtn'),
-  themeToggleBtn: document.getElementById('themeToggleBtn'),
+  catBtn: document.getElementById('catBtn'),
   exportBtn: document.getElementById('exportBtn'),
   importBtn: document.getElementById('importBtn'),
   importFile: document.getElementById('importFile'),
@@ -82,7 +83,6 @@ const elements = {
 // Initial Load
 document.addEventListener('DOMContentLoaded', () => {
   loadStashes();
-  initTheme();
 });
 
 // Listen for changes in chrome.storage.local to update UI
@@ -707,6 +707,24 @@ async function handleDeleteAll() {
   }
 }
 
+const cats = ['🐈', '🐈‍⬛'];
+let catCount = 0;
+
+function releaseCat() {
+  const cat = document.createElement('span');
+  cat.className = 'pet-cat';
+  cat.textContent = cats[catCount++ % cats.length];
+  cat.setAttribute('aria-hidden', 'true');
+  cat.style.left = `${5 + Math.random() * 90}%`;
+  cat.style.top = `${5 + Math.random() * 90}%`;
+  document.body.append(cat);
+
+  clearTimeout(state.catTimeout);
+  state.catTimeout = setTimeout(() => {
+    document.querySelectorAll('.pet-cat').forEach((cat) => cat.remove());
+  }, CONFIG.CAT_TIMEOUT_MS);
+}
+
 function setupEventListeners() {
   // Toast Listeners
   elements.undoBtn.onclick = handleUndo;
@@ -715,42 +733,8 @@ function setupEventListeners() {
 
   // Global Actions
   elements.deleteAllBtn.onclick = handleDeleteAll;
-  elements.themeToggleBtn.onclick = toggleTheme;
+  elements.catBtn.onclick = releaseCat;
   elements.exportBtn.onclick = handleExport;
   elements.importBtn.onclick = () => elements.importFile.click();
   elements.importFile.onchange = handleImport;
-}
-
-// Theme Management
-const systemDarkTheme = window.matchMedia('(prefers-color-scheme: dark)');
-
-function getSavedTheme() {
-  const theme = localStorage.getItem(CONFIG.THEME_KEY);
-  return theme === 'light' || theme === 'dark' ? theme : null;
-}
-
-function initTheme() {
-  const initialTheme = document.documentElement.getAttribute('data-theme');
-  applyTheme(initialTheme === 'dark' ? 'dark' : 'light');
-
-  systemDarkTheme.addEventListener('change', (event) => {
-    if (!getSavedTheme()) {
-      applyTheme(event.matches ? 'dark' : 'light');
-    }
-  });
-}
-
-function toggleTheme() {
-  const currentTheme = document.documentElement.getAttribute('data-theme');
-  const newTheme = currentTheme === 'dark' ? 'light' : 'dark';
-  applyTheme(newTheme);
-  localStorage.setItem(CONFIG.THEME_KEY, newTheme);
-}
-
-function applyTheme(theme) {
-  const isDark = theme === 'dark';
-  document.documentElement.setAttribute('data-theme', theme);
-  document.documentElement.style.colorScheme = theme;
-  elements.themeToggleBtn.textContent = isDark ? '🐈' : '🐈‍⬛';
-  elements.themeToggleBtn.setAttribute('aria-label', `Switch to ${isDark ? 'light' : 'dark'} theme`);
 }

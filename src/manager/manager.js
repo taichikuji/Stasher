@@ -19,30 +19,19 @@ const state = {
 };
 
 // Storage Helpers
-let storageWriteQueue = Promise.resolve();
-
 const getStashItems = async () => {
   const result = await chrome.storage.local.get({ [CONFIG.STORAGE_KEY]: [] });
   return Array.isArray(result[CONFIG.STORAGE_KEY]) ? result[CONFIG.STORAGE_KEY] : [];
 };
 
-const updateStashItems = (updater) => {
-  const run = () => {
-    const next = storageWriteQueue.then(async () => {
-      const items = await getStashItems();
-      const updated = await updater(items);
-      if (Array.isArray(updated)) {
-        await chrome.storage.local.set({ [CONFIG.STORAGE_KEY]: updated });
-      }
-      return updated;
-    });
-    storageWriteQueue = next.catch(() => {});
-    return next;
-  };
-  return globalThis.navigator?.locks
-    ? navigator.locks.request('stasher-storage', run)
-    : run();
-};
+const updateStashItems = (updater) => navigator.locks.request('stasher-storage', async () => {
+  const items = await getStashItems();
+  const updated = await updater(items);
+  if (Array.isArray(updated)) {
+    await chrome.storage.local.set({ [CONFIG.STORAGE_KEY]: updated });
+  }
+  return updated;
+});
 
 function isAllowedTabUrl(url) {
   if (typeof url !== 'string') return false;
@@ -72,15 +61,11 @@ const elements = {
   importBtn: document.getElementById('importBtn'),
   importFile: document.getElementById('importFile'),
   confirmModal: document.getElementById('confirm-modal'),
-  confirmTitle: document.getElementById('confirm-title'),
-  confirmOk: document.getElementById('confirm-ok'),
-  confirmCancel: document.getElementById('confirm-cancel')
+  confirmTitle: document.getElementById('confirm-title')
 };
 
 // Initial Load
-document.addEventListener('DOMContentLoaded', () => {
-  loadStashes();
-});
+loadStashes();
 
 // Listen for changes in chrome.storage.local to update UI
 chrome.storage.onChanged.addListener((changes, namespace) => {
@@ -546,52 +531,15 @@ function hideInfoToast() {
   if (state.infoTimeout) clearTimeout(state.infoTimeout);
 }
 
-// Confirm Modal (replaces native confirm)
+// Confirm Modal
 function showConfirmModal(message) {
   return new Promise((resolve) => {
-    // Remember what element was focused before the modal opened
-    const previousFocus = document.activeElement;
-
     elements.confirmTitle.textContent = message;
-    elements.confirmModal.classList.remove('hidden');
-
-    elements.confirmCancel.focus();
-
-    const cleanup = (result) => {
-      elements.confirmModal.classList.add('hidden');
-      elements.confirmOk.onclick = null;
-      elements.confirmCancel.onclick = null;
-      document.removeEventListener('keydown', onKey);
-
-      // Return focus back to the triggering element
-      if (previousFocus) previousFocus.focus();
-
-      resolve(result);
-    };
-
-    const onKey = (e) => {
-      if (e.key === 'Escape') cleanup(false);
-
-      // Trap the focus inside the modal
-      if (e.key === 'Tab') {
-        // If holding Shift + Tab while on the OK button, loop back to Cancel
-        if (e.shiftKey && document.activeElement === elements.confirmOk) {
-          e.preventDefault();
-          elements.confirmCancel.focus();
-        }
-        // If pressing Tab while on the Cancel button, loop back to OK
-        else if (!e.shiftKey && document.activeElement === elements.confirmCancel) {
-          e.preventDefault();
-          elements.confirmOk.focus();
-        }
-      }
-    };
-
-    // Use 'keydown' so we catch the Tab key before the browser moves focus
-    document.addEventListener('keydown', onKey);
-
-    elements.confirmOk.onclick = () => cleanup(true);
-    elements.confirmCancel.onclick = () => cleanup(false);
+    elements.confirmModal.returnValue = 'cancel';
+    elements.confirmModal.addEventListener('close', () => {
+      resolve(elements.confirmModal.returnValue === 'confirm');
+    }, { once: true });
+    elements.confirmModal.showModal();
   });
 }
 
@@ -642,7 +590,7 @@ function normalizeImportedItem(item) {
   };
 }
 
-function handleImport(event) {
+async function handleImport(event) {
   const file = event.target.files[0];
   if (!file) return;
   if (file.size > CONFIG.MAX_IMPORT_BYTES) {
@@ -651,48 +599,44 @@ function handleImport(event) {
     return;
   }
 
-  const reader = new FileReader();
-  reader.onload = async (e) => {
-    try {
-      const importedData = JSON.parse(e.target.result);
-      if (!Array.isArray(importedData)) {
-        showInfoToast('Invalid format: expected an array.');
-        return;
-      }
-      if (importedData.length > CONFIG.MAX_IMPORT_ITEMS) {
-        showInfoToast('Import contains too many stash items.');
-        return;
-      }
-
-      const valid = importedData
-        .filter(isValidStashItem)
-        .map(normalizeImportedItem);
-      if (valid.length === 0) {
-        showInfoToast('No valid stash items found in file.');
-        return;
-      }
-
-      let added = 0;
-      await updateStashItems(currentItems => {
-        const merged = [...valid, ...currentItems];
-
-        // Remove duplicates based on ID
-        const unique = merged.filter((v, i, a) => a.findIndex(t => (t.id === v.id)) === i);
-
-        added = unique.length - currentItems.length;
-        return unique;
-      });
-
-      showInfoToast(`Imported ${added} new stash${added !== 1 ? 'es' : ''}.`);
-    } catch (err) {
-      console.error("Import error:", err);
-      showInfoToast('Error parsing JSON file.');
-    } finally {
-      // Reset so the same file can be re-imported
-      event.target.value = '';
+  try {
+    const importedData = JSON.parse(await file.text());
+    if (!Array.isArray(importedData)) {
+      showInfoToast('Invalid format: expected an array.');
+      return;
     }
-  };
-  reader.readAsText(file);
+    if (importedData.length > CONFIG.MAX_IMPORT_ITEMS) {
+      showInfoToast('Import contains too many stash items.');
+      return;
+    }
+
+    const valid = importedData
+      .filter(isValidStashItem)
+      .map(normalizeImportedItem);
+    if (valid.length === 0) {
+      showInfoToast('No valid stash items found in file.');
+      return;
+    }
+
+    let added = 0;
+    await updateStashItems(currentItems => {
+      const merged = [...valid, ...currentItems];
+
+      // Remove duplicates based on ID
+      const unique = merged.filter((v, i, a) => a.findIndex(t => (t.id === v.id)) === i);
+
+      added = unique.length - currentItems.length;
+      return unique;
+    });
+
+    showInfoToast(`Imported ${added} new stash${added !== 1 ? 'es' : ''}.`);
+  } catch (err) {
+    console.error("Import error:", err);
+    showInfoToast('Error parsing JSON file.');
+  } finally {
+    // Reset so the same file can be re-imported
+    event.target.value = '';
+  }
 }
 
 async function handleDeleteAll() {

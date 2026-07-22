@@ -10,18 +10,6 @@ const CONFIG = {
 };
 
 const MANAGER_URL = chrome.runtime.getURL(CONFIG.MANAGER_PATH);
-let storageWriteQueue = Promise.resolve();
-
-const queueStorageWrite = (task) => {
-  const run = () => {
-    const next = storageWriteQueue.then(task, task);
-    storageWriteQueue = next.catch(() => {});
-    return next;
-  };
-  return globalThis.navigator?.locks
-    ? navigator.locks.request('stasher-storage', run)
-    : run();
-};
 
 /**
  * Updates the toolbar badge to show the current stash count.
@@ -44,7 +32,6 @@ const updateBadge = async () => {
  * @returns {Promise<chrome.tabs.Tab>} The manager tab.
  */
 const openManager = async (windowId) => {
-  
   // Check if manager is already open in this window
   const tabs = await chrome.tabs.query({ windowId });
   const managerTab = tabs.find(t => t.url === MANAGER_URL);
@@ -53,15 +40,15 @@ const openManager = async (windowId) => {
     // If found, highlight it and ensure it's pinned
     await chrome.tabs.update(managerTab.id, { active: true, pinned: true });
     return managerTab;
-  } else {
-    // If not found, create it pinned at index 0 (far left)
-    return await chrome.tabs.create({ 
-      url: MANAGER_URL, 
-      index: 0, 
-      pinned: true, 
-      active: true 
-    });
   }
+
+  // If not found, create it pinned at index 0 (far left)
+  return chrome.tabs.create({
+    url: MANAGER_URL,
+    index: 0,
+    pinned: true,
+    active: true
+  });
 };
 
 /**
@@ -70,7 +57,7 @@ const openManager = async (windowId) => {
  */
 const saveToStorage = async (dataItem) => {
   try {
-    await queueStorageWrite(async () => {
+    await navigator.locks.request('stasher-storage', async () => {
       const result = await chrome.storage.local.get({ [CONFIG.STORAGE_KEY]: [] });
       const items = Array.isArray(result[CONFIG.STORAGE_KEY]) ? result[CONFIG.STORAGE_KEY] : [];
       // Add new item to the beginning of the list

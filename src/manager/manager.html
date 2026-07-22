@@ -39,16 +39,15 @@
     <button id="close-info-toast" class="icon-btn" aria-label="Dismiss notification">✕</button>
   </div>
 
-  <!-- Confirmation modal (replaces native confirm/alert) -->
-  <div id="confirm-modal" class="modal-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="confirm-title">
+  <dialog id="confirm-modal" class="modal-overlay" aria-labelledby="confirm-title">
     <div class="modal-box">
       <p id="confirm-title"></p>
-      <div class="modal-actions">
-        <button id="confirm-cancel" class="secondary">Cancel</button>
-        <button id="confirm-ok" class="danger">Delete All Stashes</button>
-      </div>
+      <form method="dialog" class="modal-actions">
+        <button value="cancel" class="secondary">Cancel</button>
+        <button value="confirm" class="danger">Delete All Stashes</button>
+      </form>
     </div>
-  </div>
+  </dialog>
 
   <script src="manager.js"></script>
 </body>

@@ -75,7 +75,7 @@ body {
   justify-content: space-between;
   align-items: center;
   margin-bottom: 20px;
-  background: var(--surface0);
+  background: light-dark(#ffffff, var(--surface0));
   padding: 15px 20px;
   border-radius: 8px;
   box-shadow: 0 1px 3px var(--shadow-color);
@@ -129,7 +129,7 @@ button.secondary:hover { background-color: var(--surface2); }
 }
 
 .stash-card {
-  background: var(--surface0);
+  background: light-dark(#ffffff, var(--surface0));
   border-radius: 8px;
   padding: 0;
   margin-bottom: 20px;
@@ -169,7 +169,7 @@ button.secondary:hover { background-color: var(--surface2); }
   font-size: 14px;
   color: var(--group-color);
   background-color: light-dark(
-    color-mix(in srgb, var(--group-color) 14.9%, var(--surface0)),
+    color-mix(in srgb, var(--group-color) 14.9%, #ffffff),
     color-mix(in srgb, var(--group-color) 24.7%, var(--surface0))
   );
   border: 1px solid transparent;
@@ -381,7 +381,7 @@ button.secondary:hover { background-color: var(--surface2); }
 }
 
 .modal-box {
-  background: var(--surface0);
+  background: light-dark(#ffffff, var(--surface0));
   color: var(--text);
   padding: 24px 32px;
   border-radius: 8px;

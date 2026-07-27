@@ -241,10 +241,18 @@ button.danger:hover { background-color: color-mix(in srgb, var(--red) 12%, trans
 
 .link-item:last-child { border-bottom: none; }
 
-.link-item img {
-  width: 16px;
-  height: 16px;
+.link-icon {
+  display: grid;
+  width: 20px;
+  height: 20px;
+  flex: 0 0 auto;
+  place-items: center;
   margin-right: 10px;
+  border-radius: 5px;
+  background: var(--mantle);
+  color: var(--blue);
+  font-size: 10px;
+  font-weight: 700;
 }
 
 .link-item a {

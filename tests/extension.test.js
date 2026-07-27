@@ -323,7 +323,7 @@ test('manifest declares supported browser settings', () => {
   );
   assert.deepEqual(manifest.browser_specific_settings.gecko, {
     id: 'stasher@taichikuji.github.io',
-    strict_min_version: '139.0',
+    strict_min_version: '140.0',
     data_collection_permissions: {
       required: ['none']
     }

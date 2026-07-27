@@ -33,9 +33,6 @@
     }
   },
   "background": {
-    "scripts": [
-      "src/background/service-worker.js"
-    ],
     "service_worker": "src/background/service-worker.js"
   },
   "options_ui": {

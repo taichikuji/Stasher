@@ -29,10 +29,6 @@
   },
   "commands": {
     "stash-tabs": {
-      "suggested_key": {
-        "default": "Ctrl+Shift+S",
-        "mac": "Command+Shift+S"
-      },
       "description": "Stash current tabs"
     }
   },

@@ -13,19 +13,29 @@
   "content_security_policy": {
     "extension_pages": "script-src 'self'; object-src 'none'"
   },
+  "browser_specific_settings": {
+    "gecko": {
+      "id": "stasher@taichikuji.github.io",
+      "strict_min_version": "140.0",
+      "data_collection_permissions": {
+        "required": [
+          "none"
+        ]
+      }
+    }
+  },
   "action": {
     "default_title": "Click to Stash"
   },
   "commands": {
     "stash-tabs": {
-      "suggested_key": {
-        "default": "Ctrl+Shift+S",
-        "mac": "Command+Shift+S"
-      },
       "description": "Stash current tabs"
     }
   },
   "background": {
+    "scripts": [
+      "src/background/service-worker.js"
+    ],
     "service_worker": "src/background/service-worker.js"
   },
   "options_ui": {

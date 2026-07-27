@@ -152,10 +152,10 @@ function createTabListItem(tab, stashId, tabIndex) {
   li.className = 'link-item';
   const url = tab.url;
 
-  const img = document.createElement('img');
-  const faviconUrl = chrome.runtime.getURL(`_favicon/?pageUrl=${encodeURIComponent(url)}&size=16`);
-  img.src = faviconUrl;
-  img.alt = '';
+  const icon = document.createElement('span');
+  icon.className = 'link-icon';
+  icon.textContent = (tab.title?.trim() || url).charAt(0).toLocaleUpperCase();
+  icon.setAttribute('aria-hidden', 'true');
 
   const a = document.createElement('a');
   a.href = url;
@@ -169,7 +169,7 @@ function createTabListItem(tab, stashId, tabIndex) {
   removeBtn.setAttribute('aria-label', `Remove ${tab.title || url} from stash`);
   removeBtn.onclick = () => removeTabFromStash(stashId, tabIndex);
 
-  li.append(img, a, removeBtn);
+  li.append(icon, a, removeBtn);
 
   return li;
 }

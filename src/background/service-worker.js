@@ -142,7 +142,7 @@ chrome.contextMenus.onClicked.addListener(async (info, tab) => {
       type: 'loose',
       title: 'Ungrouped Tabs',
       color: 'grey',
-      tabs: stashable.map(t => ({ title: t.title, url: t.url, favIconUrl: t.favIconUrl }))
+      tabs: stashable.map(t => ({ title: t.title, url: t.url }))
     }, stashable, tab.windowId);
   } else if (info.menuItemId === CONTEXT_MENU_IDS.STASH_LOOSE) {
     // Force the loose-tabs path by stripping the group id.
@@ -213,8 +213,7 @@ const handleStash = async (tab) => {
         color: groupColor,
         tabs: tabsToStash.map(t => ({
           title: t.title,
-          url: t.url,
-          favIconUrl: t.favIconUrl
+          url: t.url
         }))
       };
     }

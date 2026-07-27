@@ -23,27 +23,32 @@ jobs:
           else
             VERSION=$(jq -r .version manifest.json)
           fi
-          echo "VERSION=$VERSION" >> $GITHUB_ENV
+          echo "VERSION=$VERSION" >> "$GITHUB_OUTPUT"
 
-      - name: Create ZIP
+      - name: Create browser ZIPs
         run: |
-          zip -r "Stasher_${{ env.VERSION }}.chromium.zip" \
+          zip -r "Stasher_${{ steps.version.outputs.VERSION }}.chromium.zip" \
             manifest.json \
             src \
             assets/icon_16.png \
             assets/icon_32.png \
             assets/icon_48.png \
             assets/icon_128.png
+          cp "Stasher_${{ steps.version.outputs.VERSION }}.chromium.zip" "Stasher_${{ steps.version.outputs.VERSION }}.firefox.zip"
 
-      - name: Upload Artifact
+      - name: Upload artifacts
         uses: actions/upload-artifact@v6
         with:
-          name: stasher-extension
-          path: Stasher_${{ env.VERSION }}.chromium.zip
+          name: Stasher-extensions
+          path: |
+            Stasher_${{ steps.version.outputs.VERSION }}.chromium.zip
+            Stasher_${{ steps.version.outputs.VERSION }}.firefox.zip
 
       - name: Create Release
         uses: softprops/action-gh-release@v2
         if: startsWith(github.ref, 'refs/tags/')
         with:
-          files: Stasher_${{ env.VERSION }}.chromium.zip
+          files: |
+            Stasher_${{ steps.version.outputs.VERSION }}.chromium.zip
+            Stasher_${{ steps.version.outputs.VERSION }}.firefox.zip
           generate_release_notes: true

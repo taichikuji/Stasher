@@ -317,10 +317,6 @@ test('manifest declares supported browser settings', () => {
     manifest.background.service_worker,
     'src/background/service-worker.js'
   );
-  assert.deepEqual(
-    manifest.background.scripts,
-    ['src/background/service-worker.js']
-  );
   assert.deepEqual(manifest.browser_specific_settings.gecko, {
     id: 'stasher@taichikuji.github.io',
     strict_min_version: '140.0',

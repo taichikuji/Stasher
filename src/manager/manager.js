@@ -163,20 +163,13 @@ function createTabListItem(tab, stashId, tabIndex) {
   a.target = '_blank';
   a.rel = 'noopener noreferrer';
 
-  const openBtn = document.createElement('button');
-  openBtn.className = 'open-one-btn';
-  openBtn.textContent = 'Open';
-  openBtn.title = 'Open in background';
-  openBtn.setAttribute('aria-label', `Open ${tab.title || url} in background`);
-  openBtn.onclick = () => chrome.tabs.create({ url, active: false });
-
   const removeBtn = document.createElement('button');
   removeBtn.className = 'icon-btn remove-tab-btn';
   removeBtn.innerHTML = iconMarkup('delete');
   removeBtn.setAttribute('aria-label', `Remove ${tab.title || url} from stash`);
   removeBtn.onclick = () => removeTabFromStash(stashId, tabIndex);
 
-  li.append(img, a, openBtn, removeBtn);
+  li.append(img, a, removeBtn);
 
   return li;
 }
@@ -278,13 +271,16 @@ function renderViewMode(container, item) {
   actions.className = 'card-actions';
 
   const btnRestore = document.createElement('button');
-  btnRestore.innerHTML = `${iconMarkup('restore')}Restore All`;
+  btnRestore.className = 'primary icon-only';
+  btnRestore.innerHTML = iconMarkup('restore');
+  btnRestore.title = 'Restore all tabs';
   btnRestore.setAttribute('aria-label', `Restore all tabs from ${item.title || 'stash'}`);
   btnRestore.onclick = () => restoreGroup(item);
 
   const btnDelete = document.createElement('button');
-  btnDelete.innerHTML = `${iconMarkup('delete-stash')}Delete`;
-  btnDelete.className = 'danger';
+  btnDelete.className = 'danger icon-only';
+  btnDelete.innerHTML = iconMarkup('delete-stash');
+  btnDelete.title = 'Delete stash';
   btnDelete.setAttribute('aria-label', `Delete ${item.title || 'stash'}`);
   btnDelete.onclick = () => deleteStash(item.id);
 
@@ -361,14 +357,14 @@ function renderEditMode(container, item) {
 
   // 3. Save Button
   const saveBtn = document.createElement('button');
-  saveBtn.className = 'icon-btn save-btn';
+  saveBtn.className = 'icon-btn icon-only save-btn';
   saveBtn.innerHTML = iconMarkup('check');
   saveBtn.setAttribute('aria-label', 'Save changes');
   saveBtn.onclick = handleSave;
 
   // 4. Cancel Button
   const cancelBtn = document.createElement('button');
-  cancelBtn.className = 'icon-btn cancel-btn';
+  cancelBtn.className = 'icon-btn icon-only cancel-btn';
   cancelBtn.innerHTML = iconMarkup('delete');
   cancelBtn.setAttribute('aria-label', 'Cancel editing');
   // Re-fetch clean data to revert changes

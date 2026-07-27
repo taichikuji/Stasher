@@ -28,7 +28,6 @@
 :root {
   color-scheme: light dark;
   --red: light-dark(#d20f39, #f38ba8);
-  --maroon: light-dark(#e64553, #eba0ac);
   --green: light-dark(#40a02b, #a6e3a1);
   --sapphire: light-dark(#209fb5, #74c7ec);
   --blue: light-dark(#1e66f5, #89b4fa);
@@ -36,7 +35,6 @@
   --subtext0: light-dark(#6c6f85, #a6adc8);
   --overlay0: light-dark(#9ca0b0, #6c7086);
   --overlay2: light-dark(#7c7f93, #9399b2);
-  --surface2: light-dark(#acb0be, #585b70);
   --surface1: light-dark(#bcc0cc, #45475a);
   --surface0: light-dark(#ccd0da, #313244);
   --base: light-dark(#eff1f5, #1e1e2e);
@@ -115,27 +113,27 @@ body {
 button {
   cursor: pointer;
   padding: 8px 16px;
-  border: none;
+  border: 0;
   border-radius: 4px;
-  background-color: var(--blue);
-  color: light-dark(#ffffff, var(--base));
+  background: transparent;
+  color: var(--text);
   font-weight: 500;
   margin-left: 10px;
-  transition: background-color 0.2s;
+  transition: background-color 0.15s;
 }
 
-button:hover { background-color: var(--sapphire); }
-button.danger { background-color: var(--red); }
-button.danger:hover { background-color: var(--maroon); }
-button.secondary { background-color: var(--surface1); color: var(--text); }
-button.secondary:hover { background-color: var(--surface2); }
+button:hover { background-color: light-dark(var(--surface0), var(--surface1)); }
+button.primary { color: var(--blue); }
+button.primary:hover { background-color: color-mix(in srgb, var(--blue) 12%, transparent); }
+button.danger { color: var(--red); }
+button.danger:hover { background-color: color-mix(in srgb, var(--red) 12%, transparent); }
+.icon-only { padding: 8px; }
+.icon-only .button-icon { width: 18px; height: 18px; margin-right: 0; }
 
 /* Cat easter egg */
-#catBtn {
-  background: transparent;
-  padding: 8px;
-  font-size: 20px;
-}
+.controls button { height: 40px; }
+.controls .icon-only, #catBtn { width: 40px; padding: 0; }
+#catBtn { font-size: 20px; }
 
 #catBtn:hover {
   background: var(--surface1);
@@ -215,7 +213,7 @@ button.secondary:hover { background-color: var(--surface2); }
 
 .card-actions button {
   font-size: 12px;
-  padding: 6px 12px;
+  padding: 8px;
 }
 
 .meta-info {
@@ -256,14 +254,6 @@ button.secondary:hover { background-color: var(--surface2); }
 
 .link-item a:hover { color: light-dark(var(--blue), var(--sapphire)); }
 
-.open-one-btn {
-  background: none;
-  color: light-dark(var(--text), var(--blue));
-  padding: 2px 8px;
-  font-size: 12px;
-}
-.open-one-btn:hover { background: var(--surface1); color: var(--text); }
-
 .remove-tab-btn {
   color: var(--red);
   opacity: 0;
@@ -277,10 +267,7 @@ button.secondary:hover { background-color: var(--surface2); }
   opacity: 1;
 }
 
-.remove-tab-btn:hover {
-  background-color: var(--surface1);
-  color: var(--red);
-}
+.icon-btn.remove-tab-btn:hover { background-color: color-mix(in srgb, var(--red) 12%, transparent); color: var(--red); }
 
 .edit-container {
   display: flex;
@@ -333,7 +320,8 @@ button.secondary:hover { background-color: var(--surface2); }
   color: var(--text);
   margin-left: 5px;
 }
-.icon-btn:hover { color: var(--blue); background-color: var(--surface1); border-radius: 50%; }
+.icon-btn.icon-only { padding: 8px; }
+.icon-btn:hover { color: var(--blue); background-color: var(--surface1); }
 
 .save-btn { color: var(--green); }
 .cancel-btn { color: var(--red); }

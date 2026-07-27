@@ -3,7 +3,8 @@
 **System Instruction for AI:** To build and release a new version of the extension, you must follow these steps sequentially. Do not create a tag if there are uncommitted changes.
 
 ### 1. Bump the Version
-Update the version number to the next semantic version (`Major.Minor.Patch`) in all required configuration files (e.g., `manifest.json`, `package.json`). 
+Update the version number in `manifest.json` to the next semantic version
+(`Major.Minor.Patch`).
 Commit this change to the main branch:
 ```bash
 git add .
@@ -24,12 +25,17 @@ git push origin vX.Y.Z
 
 The push will trigger a workflow visible in the [Actions](https://github.com/taichikuji/Stasher/actions) tab. The workflow will automatically:
 
+* Run the browser unit tests.
 * Parse the version number.
-* Package the extension into a `.zip` archive.
-* Upload a copy as a workflow artifact.
+* Package the universal extension as browser-specific `.zip` archives.
+* Upload both archives as one workflow artifact.
 
 ### 4. Verification
 
-Once the Action completes successfully, verify that the zipped extension is attached as an asset to a new automated GitHub Release here:
+Once the Action completes successfully, verify that both
+`Stasher_X.Y.Z.chromium.zip` and `Stasher_X.Y.Z.firefox.zip` are attached to the
+new automated GitHub Release here:
 [https://github.com/taichikuji/Stasher/releases](https://github.com/taichikuji/Stasher/releases)
 
+The packages contain the same browser manifest. The Firefox archive still
+requires Mozilla signing before permanent distribution.

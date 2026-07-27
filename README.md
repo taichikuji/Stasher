@@ -1,20 +1,37 @@
 # Stasher
-A small extension to manage tabs in your Chromium browser!
+A small browser extension to manage tabs!
 
 ## Installation
 
-1. Open your browser's extensions page.
-2. Enable developer mode.
-3. Choose **Load unpacked** and select this directory.
+Stasher supports modern desktop browsers.
 
-To keep Stasher visible in the browser toolbar, open the browser's extensions
-menu and pin Stasher. Toolbar placement is controlled by the browser.
+- **Chromium:** Open `chrome://extensions`, enable developer mode, choose
+  **Load unpacked**, and select this directory.
+- **Firefox:** Open `about:debugging#/runtime/this-firefox`, choose
+  **Load Temporary Add-on**, and select `manifest.json`.
 
-Stasher uses Manifest V3.
+Open the browser's extensions menu to pin Stasher to the toolbar. Firefox
+temporary add-ons must be loaded again after restarting the browser; permanent
+installation requires a signed package. Firefox for Android is not supported
+because its tab-group API does not provide the operations Stasher requires.
 
 ## Tag versioning workflow
 
 For the workflow on how to generate and push new releases with tags, read [GUIDE.md](.github/workflows/GUIDE.md)
+
+## Testing
+
+Run the zero-dependency test suite with Node.js 20 or newer:
+
+```bash
+node --test
+```
+
+The tests execute Stasher's background and manager scripts with the supported
+browser APIs. Before releasing, also load Stasher in the browser and verify
+toolbar, keyboard, and context-menu stashing; badge
+updates; grouped and loose-tab restoration; title and color preservation;
+import and export; and behavior after a browser restart.
 
 ## Description
 

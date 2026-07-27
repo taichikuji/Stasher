@@ -39,7 +39,9 @@
   --surface0: light-dark(#ccd0da, #313244);
   --base: light-dark(#eff1f5, #1e1e2e);
   --mantle: light-dark(#e6e9ef, #181825);
-  --shadow-color: color-mix(in srgb, var(--overlay2) 25%, transparent);
+  --surface: light-dark(#ffffff, var(--surface0));
+  --border: light-dark(var(--surface0), var(--surface1));
+  --shadow: light-dark(rgba(0, 0, 0, 0.1), rgba(0, 0, 0, 0.3));
 }
 
 body {
@@ -96,10 +98,11 @@ body {
   justify-content: space-between;
   align-items: center;
   margin-bottom: 20px;
-  background: light-dark(#ffffff, var(--surface0));
+  border: 1px solid var(--border);
+  background: var(--surface);
   padding: 15px 20px;
-  border-radius: 8px;
-  box-shadow: 0 1px 3px var(--shadow-color);
+  border-radius: 10px;
+  box-shadow: 0 1px 3px var(--shadow);
   transition: background-color 0.3s, box-shadow 0.3s;
 }
 
@@ -150,11 +153,12 @@ button.danger:hover { background-color: color-mix(in srgb, var(--red) 12%, trans
 }
 
 .stash-card {
-  background: light-dark(#ffffff, var(--surface0));
-  border-radius: 8px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface);
   padding: 0;
   margin-bottom: 20px;
-  box-shadow: 0 1px 3px var(--shadow-color);
+  box-shadow: 0 1px 3px var(--shadow);
   overflow: hidden;
   transition: background-color 0.3s;
 }
@@ -338,7 +342,7 @@ button.danger:hover { background-color: color-mix(in srgb, var(--red) 12%, trans
   display: flex;
   align-items: center;
   gap: 15px;
-  box-shadow: 0 4px 12px var(--shadow-color);
+  box-shadow: 0 4px 12px var(--shadow);
   z-index: 1000;
   min-width: 300px;
   justify-content: space-between;
@@ -396,11 +400,12 @@ button.danger:hover { background-color: color-mix(in srgb, var(--red) 12%, trans
 }
 
 .modal-box {
-  background: light-dark(#ffffff, var(--surface0));
+  border: 1px solid var(--border);
+  background: var(--surface);
   color: var(--text);
   padding: 24px 32px;
-  border-radius: 8px;
-  box-shadow: 0 8px 24px var(--shadow-color);
+  border-radius: 10px;
+  box-shadow: 0 8px 24px var(--shadow);
 }
 
 .modal-box p {

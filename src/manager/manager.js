@@ -64,6 +64,9 @@ const elements = {
   confirmTitle: document.getElementById('confirm-title')
 };
 
+const iconMarkup = (name) =>
+  `<svg class="button-icon" aria-hidden="true"><use href="#icon-${name}"></use></svg>`;
+
 // Initial Load
 loadStashes();
 
@@ -169,7 +172,7 @@ function createTabListItem(tab, stashId, tabIndex) {
 
   const removeBtn = document.createElement('button');
   removeBtn.className = 'icon-btn remove-tab-btn';
-  removeBtn.innerHTML = '&#10005;';
+  removeBtn.innerHTML = iconMarkup('delete');
   removeBtn.setAttribute('aria-label', `Remove ${tab.title || url} from stash`);
   removeBtn.onclick = () => removeTabFromStash(stashId, tabIndex);
 
@@ -237,7 +240,7 @@ function renderViewMode(container, item) {
   const collapseBtn = document.createElement('button');
   collapseBtn.className = 'icon-btn collapse-btn';
   const initiallyCollapsed = isCollapsed(item.id);
-  collapseBtn.innerHTML = initiallyCollapsed ? '&#9654;' : '&#9660;';
+  collapseBtn.innerHTML = iconMarkup('down');
   collapseBtn.setAttribute('aria-expanded', String(!initiallyCollapsed));
   collapseBtn.setAttribute('aria-label', initiallyCollapsed ? 'Expand stash' : 'Collapse stash');
   collapseBtn.onclick = () => {
@@ -245,7 +248,6 @@ function renderViewMode(container, item) {
     if (!card) return;
     const nowCollapsed = card.classList.toggle('collapsed');
     setCollapsed(item.id, nowCollapsed);
-    collapseBtn.innerHTML = nowCollapsed ? '&#9654;' : '&#9660;';
     collapseBtn.setAttribute('aria-expanded', String(!nowCollapsed));
     collapseBtn.setAttribute('aria-label', nowCollapsed ? 'Expand stash' : 'Collapse stash');
   };
@@ -260,7 +262,7 @@ function renderViewMode(container, item) {
   // 2. Edit Pencil Button
   const editBtn = document.createElement('button');
   editBtn.className = 'icon-btn';
-  editBtn.innerHTML = '&#9998;';
+  editBtn.innerHTML = iconMarkup('edit');
   editBtn.title = 'Edit Title & Color';
   editBtn.setAttribute('aria-label', 'Edit title and color');
   editBtn.onclick = () => renderEditMode(container, item);
@@ -276,12 +278,12 @@ function renderViewMode(container, item) {
   actions.className = 'card-actions';
 
   const btnRestore = document.createElement('button');
-  btnRestore.textContent = 'Restore All';
+  btnRestore.innerHTML = `${iconMarkup('restore')}Restore All`;
   btnRestore.setAttribute('aria-label', `Restore all tabs from ${item.title || 'stash'}`);
   btnRestore.onclick = () => restoreGroup(item);
 
   const btnDelete = document.createElement('button');
-  btnDelete.textContent = 'Delete';
+  btnDelete.innerHTML = `${iconMarkup('delete-stash')}Delete`;
   btnDelete.className = 'danger';
   btnDelete.setAttribute('aria-label', `Delete ${item.title || 'stash'}`);
   btnDelete.onclick = () => deleteStash(item.id);
@@ -360,14 +362,14 @@ function renderEditMode(container, item) {
   // 3. Save Button
   const saveBtn = document.createElement('button');
   saveBtn.className = 'icon-btn save-btn';
-  saveBtn.innerHTML = '&#10004;';
+  saveBtn.innerHTML = iconMarkup('check');
   saveBtn.setAttribute('aria-label', 'Save changes');
   saveBtn.onclick = handleSave;
 
   // 4. Cancel Button
   const cancelBtn = document.createElement('button');
   cancelBtn.className = 'icon-btn cancel-btn';
-  cancelBtn.innerHTML = '&#10006;';
+  cancelBtn.innerHTML = iconMarkup('delete');
   cancelBtn.setAttribute('aria-label', 'Cancel editing');
   // Re-fetch clean data to revert changes
   cancelBtn.onclick = handleCancel;

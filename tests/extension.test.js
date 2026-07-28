@@ -309,7 +309,7 @@ for (const apiNamespace of ['browser', 'chrome']) {
   });
 }
 
-test('manifest declares supported browser settings', () => {
+test('base manifest is Chromium-first', () => {
   const manifest = JSON.parse(readFileSync(join(root, 'manifest.json'), 'utf8'));
 
   assert.equal(manifest.manifest_version, 3);
@@ -317,11 +317,5 @@ test('manifest declares supported browser settings', () => {
     manifest.background.service_worker,
     'src/background/service-worker.js'
   );
-  assert.deepEqual(manifest.browser_specific_settings.gecko, {
-    id: 'stasher@taichikuji.github.io',
-    strict_min_version: '140.0',
-    data_collection_permissions: {
-      required: ['none']
-    }
-  });
+  assert.equal(manifest.browser_specific_settings, undefined);
 });

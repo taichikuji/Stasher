@@ -36,8 +36,17 @@ jobs:
             assets/icon_48.png \
             assets/icon_128.png
 
-          # Convert background object for Firefox MV3 requirement
-          jq '.background = {"scripts": ["src/background/service-worker.js"]}' manifest.json > manifest.firefox.json
+          # Add Firefox-only manifest settings
+          jq '
+            .background = {"scripts": ["src/background/service-worker.js"]}
+            | .browser_specific_settings = {
+                "gecko": {
+                  "id": "stasher@taichikuji.github.io",
+                  "strict_min_version": "140.0",
+                  "data_collection_permissions": {"required": ["none"]}
+                }
+              }
+          ' manifest.json > manifest.firefox.json
 
           # Swap manifest file temporarily for packaging
           cp manifest.json manifest.chromium.json

@@ -3,12 +3,13 @@ A small browser extension to manage tabs!
 
 ## Installation
 
-Stasher supports modern desktop browsers.
+Stasher supports both Chromium and Firefox. Firefox on a best effort basis, since I do not actively use it, but if reports are done on issues, I will fix them.
 
 - **Chromium:** Open `chrome://extensions`, enable developer mode, choose
   **Load unpacked**, and select this directory.
-- **Firefox:** Open `about:debugging#/runtime/this-firefox`, choose
-  **Load Temporary Add-on**, and select `manifest.json`.
+- **Firefox:** Extract a `.firefox.zip` release, open
+  `about:debugging#/runtime/this-firefox`, choose **Load Temporary Add-on**, and
+  select its `manifest.json` until the Mozilla Add-ons listing is available.
 
 Open the browser's extensions menu to pin Stasher to the toolbar. Firefox
 temporary add-ons must be loaded again after restarting the browser; permanent
@@ -28,10 +29,10 @@ node --test
 ```
 
 The tests execute Stasher's background and manager scripts with the supported
-browser APIs. Before releasing, also load Stasher in the browser and verify
-toolbar, keyboard, and context-menu stashing; badge
-updates; grouped and loose-tab restoration; title and color preservation;
-import and export; and behavior after a browser restart.
+browser APIs. Chromium is the primary manual test target. Before releasing,
+verify toolbar, keyboard, and context-menu stashing; badge updates; grouped and
+loose-tab restoration; title and color preservation; import and export; and
+behavior after a browser restart. Firefox is tested on a best-effort basis.
 
 ## Description
 

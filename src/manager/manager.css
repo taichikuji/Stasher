@@ -266,16 +266,20 @@ button.danger:hover { background-color: color-mix(in srgb, var(--red) 12%, trans
 
 .link-item a:hover { color: light-dark(var(--blue), var(--sapphire)); }
 
-.remove-tab-btn {
-  color: var(--red);
+/* Shared hover-visibility for delete tab and edit stash buttons */
+.remove-tab-btn, .edit-btn {
   opacity: 0;
   transition: opacity 0.15s;
+}
+.remove-tab-btn {
+  color: var(--red);
   font-size: 12px;
   margin-left: 4px;
 }
-
 .link-item:hover .remove-tab-btn,
-.remove-tab-btn:focus-visible {
+.remove-tab-btn:focus-visible,
+.card-header:hover .edit-btn,
+.edit-btn:focus-visible {
   opacity: 1;
 }
 
@@ -464,3 +468,4 @@ button.danger:hover { background-color: color-mix(in srgb, var(--red) 12%, trans
     flex-wrap: wrap;
   }
 }
+

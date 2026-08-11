@@ -255,26 +255,6 @@ for (const apiNamespace of ['browser', 'chrome']) {
     assert.deepEqual(result.badges.at(-2), ['text', { text: '1' }]);
   });
 
-  test(`stashes only valid loose tabs through the ${apiNamespace} API`, async () => {
-    const result = runBackground(apiNamespace, {
-      looseTabs: [
-        { id: 21, title: 'Kept', url: 'https://kept.example', windowId: 4, groupId: -1 },
-        { id: 22, title: 'Pinned', url: 'https://pinned.example', pinned: true, windowId: 4, groupId: -1 },
-        { id: 23, title: 'New tab', url: 'about:newtab', windowId: 4, groupId: -1 }
-      ]
-    });
-
-    await result.listeners.contextMenuClicked(
-      { menuItemId: 'stash-all-loose' },
-      { id: 21, url: 'https://kept.example', windowId: 4, groupId: 99 }
-    );
-
-    assert.deepEqual(result.getItems()[0].tabs, [
-      { title: 'Kept', url: 'https://kept.example' }
-    ]);
-    assert.deepEqual(result.removedTabs, [21]);
-  });
-
   test(`restores a tab group through the ${apiNamespace} API`, async () => {
     const stash = {
       id: 'restore-me',

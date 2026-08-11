@@ -252,11 +252,11 @@ function renderViewMode(container, item) {
   badge.className = `group-badge color-${safeColor(item.color)}`;
   badge.textContent = item.title || (item.type === 'group' ? 'Untitled Group' : 'Ungrouped Tabs');
   badge.style.cursor = 'pointer';
-  badge.addEventListener('dblclick', () => renderEditMode(container, item));
+  badge.addEventListener('dblclick', () => restoreGroup(item));
 
   // 2. Edit Pencil Button
   const editBtn = document.createElement('button');
-  editBtn.className = 'icon-btn';
+  editBtn.className = 'icon-btn edit-btn';
   editBtn.innerHTML = iconMarkup('edit');
   editBtn.title = 'Edit Title & Color';
   editBtn.setAttribute('aria-label', 'Edit title and color');
@@ -391,7 +391,7 @@ async function updateStashData(id, newTitle, newColor) {
 }
 
 async function restoreGroup(item) {
-  try {
+try {
     const tabs = Array.isArray(item.tabs) ? item.tabs.filter(t => isAllowedTabUrl(t.url)) : [];
     if (tabs.length === 0) return;
 

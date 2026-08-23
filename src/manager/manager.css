@@ -118,10 +118,20 @@ body {
   height: 28px;
 }
 
-.brand h1 {
+.brand h1,
+.brand p {
   margin: 0;
+}
+
+.brand h1 {
   font-size: 17px;
   line-height: 1.2;
+}
+
+.brand p {
+  margin-top: 2px;
+  color: var(--subtext0);
+  font-size: 11px;
 }
 
 button {
@@ -483,6 +493,10 @@ button.danger:hover { background-color: color-mix(in srgb, var(--red) 12%, trans
 
   .header {
     gap: 12px;
+  }
+
+  .brand p {
+    display: none;
   }
 
   .card-header {

@@ -115,7 +115,8 @@ function runBackground(apiNamespace, options = {}) {
   };
 }
 
-function createElement() {
+function createElement(initialClasses = []) {
+  const classes = new Set(initialClasses);
   return {
     append() {},
     appendChild() {},
@@ -129,9 +130,17 @@ function createElement() {
     closest: () => null,
     style: {},
     classList: {
-      add() {},
-      remove() {},
-      toggle: () => false
+      add: (...names) => names.forEach(name => classes.add(name)),
+      contains: name => classes.has(name),
+      remove: (...names) => names.forEach(name => classes.delete(name)),
+      toggle(name) {
+        if (classes.has(name)) {
+          classes.delete(name);
+          return false;
+        }
+        classes.add(name);
+        return true;
+      }
     }
   };
 }
@@ -176,7 +185,10 @@ function runManager(apiNamespace, initialItems) {
   const document = {
     activeElement: null,
     getElementById(id) {
-      if (!elements.has(id)) elements.set(id, createElement());
+      if (!elements.has(id)) {
+        const initialClasses = id === 'undo-toast' || id === 'info-toast' ? ['hidden'] : [];
+        elements.set(id, createElement(initialClasses));
+      }
       return elements.get(id);
     },
     createElement,
@@ -212,6 +224,7 @@ function runManager(apiNamespace, initialItems) {
     createdTabs,
     groupedTabs,
     updatedGroups,
+    getElement: id => elements.get(id),
     getItems: () => clone(items)
   };
 }
@@ -253,6 +266,74 @@ for (const apiNamespace of ['browser', 'chrome']) {
       active: true
     }]);
     assert.deepEqual(result.badges.at(-2), ['text', { text: '1' }]);
+  });
+
+  test(`stashes eligible loose tabs through the ${apiNamespace} API`, async () => {
+    const managerUrl = 'moz-extension://stasher/src/manager/manager.html';
+    const result = runBackground(apiNamespace, {
+      activeTabs: [{ id: 21, windowId: 4, groupId: -1, url: 'https://one.example' }],
+      looseTabs: [
+        { id: 21, title: 'One', url: 'https://one.example' },
+        { id: 22, title: 'Two', url: 'http://two.example' },
+        { id: 23, title: 'Pinned', url: 'https://pinned.example', pinned: true },
+        { id: 24, title: 'Manager', url: managerUrl },
+        { id: 25, title: 'New tab', url: 'chrome://newtab/' },
+        { id: 26, title: 'Blank', url: 'about:blank' },
+        { id: 27, title: 'Unsupported', url: 'ftp://files.example' }
+      ],
+      windowTabs: [{ id: 90, url: managerUrl, pinned: true }]
+    });
+
+    await result.listeners.command('stash-tabs');
+
+    assert.deepEqual(result.getItems()[0].tabs, [
+      { title: 'One', url: 'https://one.example' },
+      { title: 'Two', url: 'http://two.example' }
+    ]);
+    assert.deepEqual(result.removedTabs, [21, 22]);
+    assert.deepEqual(result.createdTabs, []);
+    assert.deepEqual(result.updatedTabs, [{ id: 90, active: true, pinned: true }]);
+  });
+
+  test(`undoes explicit stash deletion through the ${apiNamespace} API`, async () => {
+    const stash = {
+      id: 'delete-me',
+      title: 'Delete me',
+      tabs: [{ title: 'One', url: 'https://one.example' }]
+    };
+    const result = runManager(apiNamespace, [stash]);
+
+    await vm.runInContext("deleteStash('delete-me')", result.context);
+
+    assert.deepEqual(result.getItems(), []);
+    assert.equal(result.getElement('undo-toast').classList.contains('hidden'), false);
+
+    await vm.runInContext('handleUndo()', result.context);
+
+    assert.deepEqual(result.getItems(), [stash]);
+    assert.equal(result.getElement('undo-toast').classList.contains('hidden'), true);
+  });
+
+  test(`undoes individual-tab deletion through the ${apiNamespace} API`, async () => {
+    const stash = {
+      id: 'trim-me',
+      title: 'Trim me',
+      tabs: [
+        { title: 'One', url: 'https://one.example' },
+        { title: 'Two', url: 'https://two.example' }
+      ]
+    };
+    const result = runManager(apiNamespace, [stash]);
+
+    await vm.runInContext("removeTabFromStash('trim-me', 0)", result.context);
+
+    assert.deepEqual(result.getItems()[0].tabs, [stash.tabs[1]]);
+    assert.equal(result.getElement('undo-toast').classList.contains('hidden'), false);
+
+    await vm.runInContext('handleUndo()', result.context);
+
+    assert.deepEqual(result.getItems(), [stash]);
+    assert.equal(result.getElement('undo-toast').classList.contains('hidden'), true);
   });
 
   test(`restores a tab group through the ${apiNamespace} API`, async () => {

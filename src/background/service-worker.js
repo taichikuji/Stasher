@@ -127,7 +127,7 @@ const filterStashableTabs = (tabs) => {
 };
 
 /**
- * Stash logic shared by the toolbar action, keyboard shortcut, and context menu.
+ * Stash logic shared by the toolbar action and keyboard shortcut.
  * @param {object} tab - The tab whose context (window/group) drives the stash.
  */
 const handleStash = async (tab) => {

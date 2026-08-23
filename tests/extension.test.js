@@ -30,7 +30,6 @@ function runBackground(apiNamespace, options = {}) {
   const updatedTabs = [];
   const removedTabs = [];
   const badges = [];
-  const contextMenus = [];
   let items = clone(options.items ?? []);
 
   const api = {
@@ -52,10 +51,6 @@ function runBackground(apiNamespace, options = {}) {
       setBadgeText: async details => badges.push(['text', clone(details)]),
       setBadgeBackgroundColor: async details => badges.push(['color', clone(details)]),
       onClicked: eventSlot(listeners, 'actionClicked')
-    },
-    contextMenus: {
-      create: details => contextMenus.push(clone(details)),
-      onClicked: eventSlot(listeners, 'contextMenuClicked')
     },
     commands: {
       onCommand: eventSlot(listeners, 'command')
@@ -110,7 +105,6 @@ function runBackground(apiNamespace, options = {}) {
     updatedTabs,
     removedTabs,
     badges,
-    contextMenus,
     getItems: () => clone(items)
   };
 }
@@ -462,4 +456,5 @@ test('base manifest is Chromium-first', () => {
     'src/background/service-worker.js'
   );
   assert.equal(manifest.browser_specific_settings, undefined);
+  assert.equal(manifest.permissions.includes('contextMenus'), false);
 });

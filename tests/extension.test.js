@@ -145,13 +145,15 @@ function createElement(initialClasses = []) {
   };
 }
 
-function runManager(apiNamespace, initialItems) {
+function runManager(apiNamespace, initialItems, options = {}) {
   const listeners = {};
   const createdTabs = [];
+  const errors = [];
   const groupedTabs = [];
   const updatedGroups = [];
   let items = clone(initialItems);
   let nextTabId = 20;
+  let storageSetCalls = 0;
   const elements = new Map();
 
   const api = {
@@ -159,6 +161,10 @@ function runManager(apiNamespace, initialItems) {
       local: {
         get: async () => ({ stashedItems: clone(items) }),
         set: async value => {
+          storageSetCalls += 1;
+          if (storageSetCalls === options.failStorageSetAt) {
+            throw new Error('Storage update failed');
+          }
           items = clone(value.stashedItems);
         }
       },
@@ -166,11 +172,13 @@ function runManager(apiNamespace, initialItems) {
     },
     tabs: {
       create: async details => {
+        if (options.failTabCreation) throw new Error('Tab creation failed');
         const tab = { id: nextTabId++, ...clone(details) };
         createdTabs.push(tab);
         return tab;
       },
       group: async details => {
+        if (options.failTabGrouping) throw new Error('Tab grouping failed');
         groupedTabs.push(clone(details));
         return 8;
       }
@@ -202,7 +210,7 @@ function runManager(apiNamespace, initialItems) {
     Blob,
     URL,
     clearTimeout() {},
-    console,
+    console: { error: (...args) => errors.push(args) },
     document,
     navigator: {
       locks: {
@@ -222,6 +230,7 @@ function runManager(apiNamespace, initialItems) {
   return {
     context,
     createdTabs,
+    errors,
     groupedTabs,
     updatedGroups,
     getElement: id => elements.get(id),
@@ -367,8 +376,82 @@ for (const apiNamespace of ['browser', 'chrome']) {
       collapsed: false
     }]]);
     assert.deepEqual(result.getItems(), []);
+    assert.equal(result.getElement('undo-toast').classList.contains('hidden'), true);
+
+    await vm.runInContext('handleUndo()', result.context);
+
+    assert.deepEqual(result.getItems(), []);
   });
 }
+
+test('keeps a stash when restoration fails before cleanup', async () => {
+  const stash = {
+    id: 'keep-me',
+    type: 'group',
+    title: 'Keep me',
+    color: 'blue',
+    tabs: [{ title: 'One', url: 'https://one.example' }]
+  };
+
+  for (const failure of ['failTabCreation', 'failTabGrouping']) {
+    const result = runManager('browser', [stash], { [failure]: true });
+
+    await vm.runInContext(`restoreGroup(${JSON.stringify(stash)})`, result.context);
+
+    assert.deepEqual(result.getItems(), [stash]);
+    assert.equal(result.errors.length, 1);
+  }
+});
+
+test('Delete All clears storage and pending Undo', async () => {
+  const deleted = {
+    id: 'deleted-first',
+    title: 'Deleted first',
+    tabs: [{ title: 'One', url: 'https://one.example' }]
+  };
+  const remaining = {
+    id: 'remaining',
+    title: 'Remaining',
+    tabs: [{ title: 'Two', url: 'https://two.example' }]
+  };
+  const result = runManager('browser', [deleted, remaining]);
+
+  await vm.runInContext("deleteStash('deleted-first')", result.context);
+  vm.runInContext('showConfirmModal = async () => true', result.context);
+  await vm.runInContext('handleDeleteAll()', result.context);
+
+  assert.deepEqual(result.getItems(), []);
+  assert.equal(result.getElement('undo-toast').classList.contains('hidden'), true);
+
+  await vm.runInContext('handleUndo()', result.context);
+
+  assert.deepEqual(result.getItems(), []);
+});
+
+test('failed Delete All preserves storage and pending Undo', async () => {
+  const deleted = {
+    id: 'deleted-first',
+    title: 'Deleted first',
+    tabs: [{ title: 'One', url: 'https://one.example' }]
+  };
+  const remaining = {
+    id: 'remaining',
+    title: 'Remaining',
+    tabs: [{ title: 'Two', url: 'https://two.example' }]
+  };
+  const result = runManager('browser', [deleted, remaining], { failStorageSetAt: 2 });
+
+  await vm.runInContext("deleteStash('deleted-first')", result.context);
+  vm.runInContext('showConfirmModal = async () => true', result.context);
+  await assert.rejects(vm.runInContext('handleDeleteAll()', result.context));
+
+  assert.deepEqual(result.getItems(), [remaining]);
+  assert.equal(result.getElement('undo-toast').classList.contains('hidden'), false);
+
+  await vm.runInContext('handleUndo()', result.context);
+
+  assert.deepEqual(result.getItems(), [deleted, remaining]);
+});
 
 test('base manifest is Chromium-first', () => {
   const manifest = JSON.parse(readFileSync(join(root, 'manifest.json'), 'utf8'));

@@ -555,8 +555,10 @@ async function handleExport() {
     a.download = `stasher-export-${dateStr}.json`;
     a.click();
     setTimeout(() => URL.revokeObjectURL(url), 0);
+    showInfoToast('Exported your stashes.');
   } catch (error) {
     console.error("Error exporting:", error);
+    showInfoToast('Could not export your stashes.');
   }
 }
 

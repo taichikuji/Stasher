@@ -41,6 +41,7 @@
   --mantle: light-dark(#e6e9ef, #181825);
   --surface: light-dark(#ffffff, var(--surface0));
   --border: light-dark(var(--surface0), var(--surface1));
+  --on-accent: light-dark(#ffffff, var(--base));
   --shadow: light-dark(rgba(0, 0, 0, 0.1), rgba(0, 0, 0, 0.3));
 }
 
@@ -100,17 +101,30 @@ body {
   margin-bottom: 20px;
   border: 1px solid var(--border);
   background: var(--surface);
-  padding: 15px 20px;
+  padding: 12px 16px;
   border-radius: 10px;
   box-shadow: 0 1px 3px var(--shadow);
   transition: background-color 0.3s, box-shadow 0.3s;
 }
 
-.header-icon {
-  height: 28px;
-  width: 28px;
-  margin-right: 12px;
-  vertical-align: middle;
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.brand-mark {
+  width: 32px;
+  height: 32px;
+  border-radius: 10px;
+  background: var(--blue);
+  color: var(--on-accent);
+}
+
+.brand h1 {
+  margin: 0;
+  font-size: 17px;
+  line-height: 1.2;
 }
 
 button {
@@ -133,10 +147,41 @@ button.danger:hover { background-color: color-mix(in srgb, var(--red) 12%, trans
 .icon-only { padding: 8px; }
 .icon-only .button-icon { width: 18px; height: 18px; margin-right: 0; }
 
-/* Cat easter egg */
-.controls button { height: 40px; }
-.controls .icon-only, #catBtn { width: 40px; padding: 0; }
-#catBtn { font-size: 20px; }
+/* Header actions and cat easter egg */
+.header-actions {
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
+  gap: 4px;
+}
+
+.header-actions .icon-button {
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  margin: 0;
+  border-radius: 7px;
+  color: var(--subtext0);
+}
+
+.header-actions .icon-button:hover {
+  color: var(--text);
+}
+
+.header-actions .danger,
+.header-actions .danger:hover {
+  color: var(--red);
+}
+
+.header-actions .button-icon {
+  width: 18px;
+  height: 18px;
+  margin-right: 0;
+}
+
+#catBtn { font-size: 18px; }
 
 #catBtn:hover {
   background: var(--surface1);
@@ -435,21 +480,12 @@ button.danger:hover { background-color: color-mix(in srgb, var(--red) 12%, trans
 
 /* Responsive */
 @media (max-width: 600px) {
+  body {
+    padding: 12px;
+  }
+
   .header {
-    flex-direction: column;
     gap: 12px;
-    text-align: center;
-  }
-
-  .controls {
-    display: flex;
-    flex-wrap: wrap;
-    justify-content: center;
-    gap: 6px;
-  }
-
-  .controls button {
-    margin-left: 0;
   }
 
   .card-header {
@@ -468,4 +504,3 @@ button.danger:hover { background-color: color-mix(in srgb, var(--red) 12%, trans
     flex-wrap: wrap;
   }
 }
-

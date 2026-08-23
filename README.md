@@ -30,7 +30,7 @@ node --test
 
 The tests execute Stasher's background and manager scripts with the supported
 browser APIs. Chromium is the primary manual test target. Before releasing,
-verify toolbar, keyboard, and context-menu stashing; badge updates; grouped and
+verify toolbar and keyboard stashing; badge updates; grouped and
 loose-tab restoration; title and color preservation; import and export; and
 behavior after a browser restart. Firefox is tested on a best-effort basis.
 

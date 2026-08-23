@@ -421,14 +421,15 @@ try {
 
     // 4. Cleanup Storage
     // We do not fully await this because we want to delete it in the background while the user sees their tabs
-    deleteStash(item.id).catch(err => console.error("Error deleting after restore:", err));
+    deleteStash(item.id, { undo: false })
+      .catch(err => console.error("Error deleting after restore:", err));
 
   } catch (error) {
     console.error("Error restoring group:", error);
   }
 }
 
-async function deleteStash(id) {
+async function deleteStash(id, { undo = true } = {}) {
   try {
     let deleted = false;
     await updateStashItems(items => {
@@ -437,7 +438,7 @@ async function deleteStash(id) {
       if (itemIndex === -1) return null;
 
       // 2. Save it to memory (The Safety Net)
-      state.undoStack.push({ kind: 'stash', item: items[itemIndex] });
+      if (undo) state.undoStack.push({ kind: 'stash', item: items[itemIndex] });
 
       // 3. Remove it from storage immediately
       deleted = true;
@@ -445,7 +446,7 @@ async function deleteStash(id) {
     });
 
     // 4. Show the Undo Toast
-    if (deleted) showUndoToast();
+    if (deleted && undo) showUndoToast();
   } catch (error) {
     console.error("Error deleting stash:", error);
   }
@@ -645,6 +646,7 @@ async function handleDeleteAll() {
   );
   if (confirmed) {
     await updateStashItems(() => []);
+    hideUndoToast();
   }
 }
 

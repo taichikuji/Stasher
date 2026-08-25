@@ -6,22 +6,21 @@ const CONFIG = {
     'chrome://newtab/',
     'about:blank'
   ],
-  ALLOWED_SCHEMES: ['http:', 'https:', 'chrome-extension:', 'moz-extension:']
+  ALLOWED_SCHEMES: ['http:', 'https:', 'chrome-extension:']
 };
 
-const browserApi = globalThis.browser ?? globalThis.chrome;
-const MANAGER_URL = browserApi.runtime.getURL(CONFIG.MANAGER_PATH);
+const MANAGER_URL = chrome.runtime.getURL(CONFIG.MANAGER_PATH);
 
 /**
  * Updates the toolbar badge to show the current stash count.
  */
 const updateBadge = async () => {
   try {
-    const result = await browserApi.storage.local.get({ [CONFIG.STORAGE_KEY]: [] });
+    const result = await chrome.storage.local.get({ [CONFIG.STORAGE_KEY]: [] });
     const items = Array.isArray(result[CONFIG.STORAGE_KEY]) ? result[CONFIG.STORAGE_KEY] : [];
     const count = items.length;
-    await browserApi.action.setBadgeText({ text: count > 0 ? String(count) : '' });
-    await browserApi.action.setBadgeBackgroundColor({ color: '#1e66f5' });
+    await chrome.action.setBadgeText({ text: count > 0 ? String(count) : '' });
+    await chrome.action.setBadgeBackgroundColor({ color: '#1e66f5' });
   } catch (error) {
     console.error("Error updating badge:", error);
   }
@@ -34,17 +33,17 @@ const updateBadge = async () => {
  */
 const openManager = async (windowId) => {
   // Check if manager is already open in this window
-  const tabs = await browserApi.tabs.query({ windowId });
+  const tabs = await chrome.tabs.query({ windowId });
   const managerTab = tabs.find(t => t.url === MANAGER_URL);
 
   if (managerTab) {
     // If found, highlight it and ensure it's pinned
-    await browserApi.tabs.update(managerTab.id, { active: true, pinned: true });
+    await chrome.tabs.update(managerTab.id, { active: true, pinned: true });
     return managerTab;
   }
 
   // If not found, create it pinned at index 0 (far left)
-  return browserApi.tabs.create({
+  return chrome.tabs.create({
     url: MANAGER_URL,
     index: 0,
     pinned: true,
@@ -59,10 +58,10 @@ const openManager = async (windowId) => {
 const saveToStorage = async (dataItem) => {
   try {
     await navigator.locks.request('stasher-storage', async () => {
-      const result = await browserApi.storage.local.get({ [CONFIG.STORAGE_KEY]: [] });
+      const result = await chrome.storage.local.get({ [CONFIG.STORAGE_KEY]: [] });
       const items = Array.isArray(result[CONFIG.STORAGE_KEY]) ? result[CONFIG.STORAGE_KEY] : [];
       // Add new item to the beginning of the list
-      await browserApi.storage.local.set({ [CONFIG.STORAGE_KEY]: [dataItem, ...items] });
+      await chrome.storage.local.set({ [CONFIG.STORAGE_KEY]: [dataItem, ...items] });
     });
   } catch (error) {
     console.error("Error saving to storage:", error);
@@ -87,7 +86,7 @@ const processStash = async (stashData, tabsToRemove, windowId) => {
     
     // Only remove tabs if we successfully saved (if there was data)
     if (tabsToRemove.length > 0 && stashData) {
-      await browserApi.tabs.remove(tabsToRemove.map(t => t.id));
+      await chrome.tabs.remove(tabsToRemove.map(t => t.id));
     }
 
     await updateBadge();
@@ -97,17 +96,17 @@ const processStash = async (stashData, tabsToRemove, windowId) => {
 };
 
 // Keep the badge in sync when the manager changes storage (delete, undo, import, etc.)
-browserApi.storage.onChanged.addListener((changes, namespace) => {
+chrome.storage.onChanged.addListener((changes, namespace) => {
   if (namespace === 'local' && changes[CONFIG.STORAGE_KEY]) {
     updateBadge();
   }
 });
 
 
-browserApi.runtime.onInstalled.addListener(() => {
+chrome.runtime.onInstalled.addListener(() => {
   updateBadge();
 });
-browserApi.runtime.onStartup.addListener(updateBadge);
+chrome.runtime.onStartup.addListener(updateBadge);
 
 /**
  * Helper to filter valid tabs for stashing.
@@ -142,9 +141,9 @@ const handleStash = async (tab) => {
     let stashType = 'loose';
 
     // Scenario 1: Stash a specific Tab Group
-    if (currentGroupId !== browserApi.tabGroups.TAB_GROUP_ID_NONE) {
-      const group = await browserApi.tabGroups.get(currentGroupId);
-      const tabsInGroup = await browserApi.tabs.query({ groupId: currentGroupId });
+    if (currentGroupId !== chrome.tabGroups.TAB_GROUP_ID_NONE) {
+      const group = await chrome.tabGroups.get(currentGroupId);
+      const tabsInGroup = await chrome.tabs.query({ groupId: currentGroupId });
 
       tabsToStash = filterStashableTabs(tabsInGroup);
 
@@ -155,9 +154,9 @@ const handleStash = async (tab) => {
 
     // Scenario 2: Stash all "loose" (non-grouped) tabs in the window
     else {
-      const looseTabs = await browserApi.tabs.query({
+      const looseTabs = await chrome.tabs.query({
         windowId: currentWindowId,
-        groupId: browserApi.tabGroups.TAB_GROUP_ID_NONE
+        groupId: chrome.tabGroups.TAB_GROUP_ID_NONE
       });
 
       tabsToStash = filterStashableTabs(looseTabs);
@@ -186,10 +185,10 @@ const handleStash = async (tab) => {
   }
 };
 
-browserApi.action.onClicked.addListener(handleStash);
+chrome.action.onClicked.addListener(handleStash);
 
-browserApi.commands.onCommand.addListener(async (command) => {
+chrome.commands.onCommand.addListener(async (command) => {
   if (command !== 'stash-tabs') return;
-  const [tab] = await browserApi.tabs.query({ active: true, currentWindow: true });
+  const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
   if (tab) await handleStash(tab);
 });

@@ -3,18 +3,21 @@ A small browser extension to manage tabs!
 
 ## Installation
 
-Stasher supports both Chromium and Firefox. Firefox on a best effort basis, since I do not actively use it, but if reports are done on issues, I will fix them.
+Stasher supports Chromium-based desktop browsers, including Google Chrome,
+Brave, Microsoft Edge, Opera, Vivaldi, and compatible Chromium forks.
 
-- **Chromium:** Open `chrome://extensions`, enable developer mode, choose
-  **Load unpacked**, and select this directory.
-- **Firefox:** Extract a `.firefox.zip` release, open
-  `about:debugging#/runtime/this-firefox`, choose **Load Temporary Add-on**, and
-  select its `manifest.json` until the Mozilla Add-ons listing is available.
+Open your browser's extensions page (for example, `chrome://extensions`,
+`brave://extensions`, or `edge://extensions`), enable developer mode, choose
+**Load unpacked**, and select this directory.
 
-Open the browser's extensions menu to pin Stasher to the toolbar. Firefox
-temporary add-ons must be loaded again after restarting the browser; permanent
-installation requires a signed package. Firefox for Android is not supported
-because its tab-group API does not provide the operations Stasher requires.
+Open the browser's extensions menu to pin Stasher to the toolbar.
+
+## Why is there no Firefox build?
+
+Stasher was created for Chromium-based browsers and has never been fully tested
+on Firefox. It has also not been actively used there, nor has Firefox support
+been requested. Maintaining a build that cannot be confidently validated is
+therefore outside Stasher's scope.
 
 ## Tag versioning workflow
 
@@ -28,11 +31,13 @@ Run the zero-dependency test suite with Node.js 20 or newer:
 node --test
 ```
 
-The tests execute Stasher's background and manager scripts with the supported
-browser APIs. Chromium is the primary manual test target. Before releasing,
-verify toolbar and keyboard stashing; badge updates; grouped and
-loose-tab restoration; title and color preservation; import and export; and
-behavior after a browser restart. Firefox is tested on a best-effort basis.
+The tests execute Stasher's background and manager scripts against Chromium's
+standard `chrome.*` extension API namespace; despite its name, that namespace
+is shared by compatible Chromium-based browsers. Before releasing, test Chrome
+and at least one other Chromium-based browser such as Brave or Edge. Verify
+toolbar and keyboard stashing; badge updates; grouped and loose-tab restoration;
+title and color preservation; import and export; and behavior after restarting
+each browser.
 
 ## Description
 

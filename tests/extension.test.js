@@ -24,7 +24,7 @@ function eventSlot(listeners, name) {
   };
 }
 
-function runBackground(apiNamespace, options = {}) {
+function runBackground(options = {}) {
   const listeners = {};
   const createdTabs = [];
   const updatedTabs = [];
@@ -34,7 +34,7 @@ function runBackground(apiNamespace, options = {}) {
 
   const api = {
     runtime: {
-      getURL: path => `moz-extension://stasher/${path}`,
+      getURL: path => `chrome-extension://stasher/${path}`,
       onInstalled: eventSlot(listeners, 'installed'),
       onStartup: eventSlot(listeners, 'startup')
     },
@@ -87,7 +87,7 @@ function runBackground(apiNamespace, options = {}) {
   };
 
   const context = vm.createContext({
-    [apiNamespace]: api,
+    chrome: api,
     console,
     crypto: { randomUUID: () => 'stash-id' },
     navigator: {
@@ -139,7 +139,7 @@ function createElement(initialClasses = []) {
   };
 }
 
-function runManager(apiNamespace, initialItems, options = {}) {
+function runManager(initialItems, options = {}) {
   const listeners = {};
   const createdTabs = [];
   const errors = [];
@@ -200,7 +200,7 @@ function runManager(apiNamespace, initialItems, options = {}) {
 
   const sessionValues = new Map();
   const context = vm.createContext({
-    [apiNamespace]: api,
+    chrome: api,
     Blob,
     URL,
     clearTimeout() {},
@@ -232,151 +232,149 @@ function runManager(apiNamespace, initialItems, options = {}) {
   };
 }
 
-for (const apiNamespace of ['browser', 'chrome']) {
-  test(`stashes a tab group through the ${apiNamespace} API`, async () => {
-    const result = runBackground(apiNamespace, {
-      groupedTabs: [
-        { id: 11, title: 'One', url: 'https://one.example', windowId: 4, groupId: 7 },
-        { id: 12, title: 'Two', url: 'https://two.example', windowId: 4, groupId: 7 }
-      ]
-    });
-
-    await result.listeners.actionClicked({
-      id: 11,
-      title: 'One',
-      url: 'https://one.example',
-      windowId: 4,
-      groupId: 7
-    });
-
-    assert.deepEqual(result.getItems(), [{
-      id: 'stash-id',
-      timestamp: result.getItems()[0].timestamp,
-      type: 'group',
-      title: 'Work',
-      color: 'blue',
-      tabs: [
-        { title: 'One', url: 'https://one.example' },
-        { title: 'Two', url: 'https://two.example' }
-      ]
-    }]);
-    assert.deepEqual(result.removedTabs, [11, 12]);
-    assert.deepEqual(result.createdTabs, [{
-      id: 100,
-      url: 'moz-extension://stasher/src/manager/manager.html',
-      index: 0,
-      pinned: true,
-      active: true
-    }]);
-    assert.deepEqual(result.badges.at(-2), ['text', { text: '1' }]);
+test('stashes a tab group through the Chromium extension API', async () => {
+  const result = runBackground({
+    groupedTabs: [
+      { id: 11, title: 'One', url: 'https://one.example', windowId: 4, groupId: 7 },
+      { id: 12, title: 'Two', url: 'https://two.example', windowId: 4, groupId: 7 }
+    ]
   });
 
-  test(`stashes eligible loose tabs through the ${apiNamespace} API`, async () => {
-    const managerUrl = 'moz-extension://stasher/src/manager/manager.html';
-    const result = runBackground(apiNamespace, {
-      activeTabs: [{ id: 21, windowId: 4, groupId: -1, url: 'https://one.example' }],
-      looseTabs: [
-        { id: 21, title: 'One', url: 'https://one.example' },
-        { id: 22, title: 'Two', url: 'http://two.example' },
-        { id: 23, title: 'Pinned', url: 'https://pinned.example', pinned: true },
-        { id: 24, title: 'Manager', url: managerUrl },
-        { id: 25, title: 'New tab', url: 'chrome://newtab/' },
-        { id: 26, title: 'Blank', url: 'about:blank' },
-        { id: 27, title: 'Unsupported', url: 'ftp://files.example' }
-      ],
-      windowTabs: [{ id: 90, url: managerUrl, pinned: true }]
-    });
+  await result.listeners.actionClicked({
+    id: 11,
+    title: 'One',
+    url: 'https://one.example',
+    windowId: 4,
+    groupId: 7
+  });
 
-    await result.listeners.command('stash-tabs');
-
-    assert.deepEqual(result.getItems()[0].tabs, [
+  assert.deepEqual(result.getItems(), [{
+    id: 'stash-id',
+    timestamp: result.getItems()[0].timestamp,
+    type: 'group',
+    title: 'Work',
+    color: 'blue',
+    tabs: [
       { title: 'One', url: 'https://one.example' },
-      { title: 'Two', url: 'http://two.example' }
-    ]);
-    assert.deepEqual(result.removedTabs, [21, 22]);
-    assert.deepEqual(result.createdTabs, []);
-    assert.deepEqual(result.updatedTabs, [{ id: 90, active: true, pinned: true }]);
+      { title: 'Two', url: 'https://two.example' }
+    ]
+  }]);
+  assert.deepEqual(result.removedTabs, [11, 12]);
+  assert.deepEqual(result.createdTabs, [{
+    id: 100,
+    url: 'chrome-extension://stasher/src/manager/manager.html',
+    index: 0,
+    pinned: true,
+    active: true
+  }]);
+  assert.deepEqual(result.badges.at(-2), ['text', { text: '1' }]);
+});
+
+test('stashes eligible loose tabs through the Chromium extension API', async () => {
+  const managerUrl = 'chrome-extension://stasher/src/manager/manager.html';
+  const result = runBackground({
+    activeTabs: [{ id: 21, windowId: 4, groupId: -1, url: 'https://one.example' }],
+    looseTabs: [
+      { id: 21, title: 'One', url: 'https://one.example' },
+      { id: 22, title: 'Two', url: 'http://two.example' },
+      { id: 23, title: 'Pinned', url: 'https://pinned.example', pinned: true },
+      { id: 24, title: 'Manager', url: managerUrl },
+      { id: 25, title: 'New tab', url: 'chrome://newtab/' },
+      { id: 26, title: 'Blank', url: 'about:blank' },
+      { id: 27, title: 'Unsupported', url: 'ftp://files.example' }
+    ],
+    windowTabs: [{ id: 90, url: managerUrl, pinned: true }]
   });
 
-  test(`undoes explicit stash deletion through the ${apiNamespace} API`, async () => {
-    const stash = {
-      id: 'delete-me',
-      title: 'Delete me',
-      tabs: [{ title: 'One', url: 'https://one.example' }]
-    };
-    const result = runManager(apiNamespace, [stash]);
+  await result.listeners.command('stash-tabs');
 
-    await vm.runInContext("deleteStash('delete-me')", result.context);
+  assert.deepEqual(result.getItems()[0].tabs, [
+    { title: 'One', url: 'https://one.example' },
+    { title: 'Two', url: 'http://two.example' }
+  ]);
+  assert.deepEqual(result.removedTabs, [21, 22]);
+  assert.deepEqual(result.createdTabs, []);
+  assert.deepEqual(result.updatedTabs, [{ id: 90, active: true, pinned: true }]);
+});
 
-    assert.deepEqual(result.getItems(), []);
-    assert.equal(result.getElement('undo-toast').classList.contains('hidden'), false);
+test('undoes explicit stash deletion through the Chromium extension API', async () => {
+  const stash = {
+    id: 'delete-me',
+    title: 'Delete me',
+    tabs: [{ title: 'One', url: 'https://one.example' }]
+  };
+  const result = runManager([stash]);
 
-    await vm.runInContext('handleUndo()', result.context);
+  await vm.runInContext("deleteStash('delete-me')", result.context);
 
-    assert.deepEqual(result.getItems(), [stash]);
-    assert.equal(result.getElement('undo-toast').classList.contains('hidden'), true);
-  });
+  assert.deepEqual(result.getItems(), []);
+  assert.equal(result.getElement('undo-toast').classList.contains('hidden'), false);
 
-  test(`undoes individual-tab deletion through the ${apiNamespace} API`, async () => {
-    const stash = {
-      id: 'trim-me',
-      title: 'Trim me',
-      tabs: [
-        { title: 'One', url: 'https://one.example' },
-        { title: 'Two', url: 'https://two.example' }
-      ]
-    };
-    const result = runManager(apiNamespace, [stash]);
+  await vm.runInContext('handleUndo()', result.context);
 
-    await vm.runInContext("removeTabFromStash('trim-me', 0)", result.context);
+  assert.deepEqual(result.getItems(), [stash]);
+  assert.equal(result.getElement('undo-toast').classList.contains('hidden'), true);
+});
 
-    assert.deepEqual(result.getItems()[0].tabs, [stash.tabs[1]]);
-    assert.equal(result.getElement('undo-toast').classList.contains('hidden'), false);
+test('undoes individual-tab deletion through the Chromium extension API', async () => {
+  const stash = {
+    id: 'trim-me',
+    title: 'Trim me',
+    tabs: [
+      { title: 'One', url: 'https://one.example' },
+      { title: 'Two', url: 'https://two.example' }
+    ]
+  };
+  const result = runManager([stash]);
 
-    await vm.runInContext('handleUndo()', result.context);
+  await vm.runInContext("removeTabFromStash('trim-me', 0)", result.context);
 
-    assert.deepEqual(result.getItems(), [stash]);
-    assert.equal(result.getElement('undo-toast').classList.contains('hidden'), true);
-  });
+  assert.deepEqual(result.getItems()[0].tabs, [stash.tabs[1]]);
+  assert.equal(result.getElement('undo-toast').classList.contains('hidden'), false);
 
-  test(`restores a tab group through the ${apiNamespace} API`, async () => {
-    const stash = {
-      id: 'restore-me',
-      timestamp: '2026-07-27T00:00:00.000Z',
-      type: 'group',
-      title: 'Restored',
-      color: 'purple',
-      tabs: [
-        { title: 'One', url: 'https://one.example' },
-        { title: 'Two', url: 'https://two.example' }
-      ]
-    };
-    const result = runManager(apiNamespace, [stash]);
+  await vm.runInContext('handleUndo()', result.context);
 
-    await vm.runInContext(`restoreGroup(${JSON.stringify(stash)})`, result.context);
-    await new Promise(resolve => setImmediate(resolve));
+  assert.deepEqual(result.getItems(), [stash]);
+  assert.equal(result.getElement('undo-toast').classList.contains('hidden'), true);
+});
 
-    assert.deepEqual(
-      result.createdTabs.map(({ id, ...tab }) => tab),
-      [
-        { url: 'https://one.example', active: false },
-        { url: 'https://two.example', active: false }
-      ]
-    );
-    assert.deepEqual(result.groupedTabs, [{ tabIds: [20, 21] }]);
-    assert.deepEqual(result.updatedGroups, [[8, {
-      title: 'Restored',
-      color: 'purple',
-      collapsed: false
-    }]]);
-    assert.deepEqual(result.getItems(), []);
-    assert.equal(result.getElement('undo-toast').classList.contains('hidden'), true);
+test('restores a tab group through the Chromium extension API', async () => {
+  const stash = {
+    id: 'restore-me',
+    timestamp: '2026-07-27T00:00:00.000Z',
+    type: 'group',
+    title: 'Restored',
+    color: 'purple',
+    tabs: [
+      { title: 'One', url: 'https://one.example' },
+      { title: 'Two', url: 'https://two.example' }
+    ]
+  };
+  const result = runManager([stash]);
 
-    await vm.runInContext('handleUndo()', result.context);
+  await vm.runInContext(`restoreGroup(${JSON.stringify(stash)})`, result.context);
+  await new Promise(resolve => setImmediate(resolve));
 
-    assert.deepEqual(result.getItems(), []);
-  });
-}
+  assert.deepEqual(
+    result.createdTabs.map(({ id, ...tab }) => tab),
+    [
+      { url: 'https://one.example', active: false },
+      { url: 'https://two.example', active: false }
+    ]
+  );
+  assert.deepEqual(result.groupedTabs, [{ tabIds: [20, 21] }]);
+  assert.deepEqual(result.updatedGroups, [[8, {
+    title: 'Restored',
+    color: 'purple',
+    collapsed: false
+  }]]);
+  assert.deepEqual(result.getItems(), []);
+  assert.equal(result.getElement('undo-toast').classList.contains('hidden'), true);
+
+  await vm.runInContext('handleUndo()', result.context);
+
+  assert.deepEqual(result.getItems(), []);
+});
 
 test('keeps a stash when restoration fails before cleanup', async () => {
   const stash = {
@@ -388,7 +386,7 @@ test('keeps a stash when restoration fails before cleanup', async () => {
   };
 
   for (const failure of ['failTabCreation', 'failTabGrouping']) {
-    const result = runManager('browser', [stash], { [failure]: true });
+    const result = runManager([stash], { [failure]: true });
 
     await vm.runInContext(`restoreGroup(${JSON.stringify(stash)})`, result.context);
 
@@ -408,7 +406,7 @@ test('Delete All clears storage and pending Undo', async () => {
     title: 'Remaining',
     tabs: [{ title: 'Two', url: 'https://two.example' }]
   };
-  const result = runManager('browser', [deleted, remaining]);
+  const result = runManager([deleted, remaining]);
 
   await vm.runInContext("deleteStash('deleted-first')", result.context);
   vm.runInContext('showConfirmModal = async () => true', result.context);
@@ -433,7 +431,7 @@ test('failed Delete All preserves storage and pending Undo', async () => {
     title: 'Remaining',
     tabs: [{ title: 'Two', url: 'https://two.example' }]
   };
-  const result = runManager('browser', [deleted, remaining], { failStorageSetAt: 2 });
+  const result = runManager([deleted, remaining], { failStorageSetAt: 2 });
 
   await vm.runInContext("deleteStash('deleted-first')", result.context);
   vm.runInContext('showConfirmModal = async () => true', result.context);
@@ -447,7 +445,7 @@ test('failed Delete All preserves storage and pending Undo', async () => {
   assert.deepEqual(result.getItems(), [deleted, remaining]);
 });
 
-test('base manifest is Chromium-first', () => {
+test('manifest defines a Chromium MV3 service worker', () => {
   const manifest = JSON.parse(readFileSync(join(root, 'manifest.json'), 'utf8'));
 
   assert.equal(manifest.manifest_version, 3);
@@ -455,6 +453,5 @@ test('base manifest is Chromium-first', () => {
     manifest.background.service_worker,
     'src/background/service-worker.js'
   );
-  assert.equal(manifest.browser_specific_settings, undefined);
   assert.equal(manifest.permissions.includes('contextMenus'), false);
 });

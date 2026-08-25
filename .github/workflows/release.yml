@@ -25,9 +25,8 @@ jobs:
           fi
           echo "VERSION=$VERSION" >> "$GITHUB_OUTPUT"
 
-      - name: Create browser ZIPs
+      - name: Create Chromium ZIP
         run: |
-          # Pack Chromium ZIP using default manifest.json
           zip -r "Stasher_${{ steps.version.outputs.VERSION }}.chromium.zip" \
             manifest.json \
             src \
@@ -36,46 +35,15 @@ jobs:
             assets/icon_48.png \
             assets/icon_128.png
 
-          # Add Firefox-only manifest settings
-          jq '
-            .background = {"scripts": ["src/background/service-worker.js"]}
-            | .browser_specific_settings = {
-                "gecko": {
-                  "id": "stasher@taichikuji.github.io",
-                  "strict_min_version": "140.0",
-                  "data_collection_permissions": {"required": ["none"]}
-                }
-              }
-          ' manifest.json > manifest.firefox.json
-
-          # Swap manifest file temporarily for packaging
-          cp manifest.json manifest.chromium.json
-          mv manifest.firefox.json manifest.json
-
-          zip -r "Stasher_${{ steps.version.outputs.VERSION }}.firefox.zip" \
-            manifest.json \
-            src \
-            assets/icon_16.png \
-            assets/icon_32.png \
-            assets/icon_48.png \
-            assets/icon_128.png
-
-          # Restore base manifest
-          mv manifest.chromium.json manifest.json
-
       - name: Upload artifacts
         uses: actions/upload-artifact@v6
         with:
           name: Stasher-extensions
-          path: |
-            Stasher_${{ steps.version.outputs.VERSION }}.chromium.zip
-            Stasher_${{ steps.version.outputs.VERSION }}.firefox.zip
+          path: Stasher_${{ steps.version.outputs.VERSION }}.chromium.zip
 
       - name: Create Release
         uses: softprops/action-gh-release@v2
         if: startsWith(github.ref, 'refs/tags/')
         with:
-          files: |
-            Stasher_${{ steps.version.outputs.VERSION }}.chromium.zip
-            Stasher_${{ steps.version.outputs.VERSION }}.firefox.zip
+          files: Stasher_${{ steps.version.outputs.VERSION }}.chromium.zip
           generate_release_notes: true

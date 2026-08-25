@@ -72,9 +72,9 @@ We welcome pull requests! Here's how to submit one:
 To set up the project for local development:
 
 1. Clone your fork of the repository
-2. In Chromium 121 or newer, open `chrome://extensions`, enable developer mode, and choose **Load unpacked**
-3. After making changes, reload Stasher in Chromium and test the affected behavior
-4. Firefox 140 or newer is supported on a best-effort basis through the generated `.firefox.zip` release
+2. Open a Chromium-based browser's extensions page, enable developer mode, and choose **Load unpacked**
+3. After making changes, reload Stasher and test the affected behavior
+4. Test release changes in Chrome and at least one other Chromium-based browser such as Brave or Edge
 
 ## Project Structure
 
@@ -95,7 +95,7 @@ To add a new feature:
 1. Identify whether the change belongs in the background service worker or manager page
 2. Follow the patterns already used in the relevant JavaScript, HTML, and CSS files
 3. Update `manifest.json` only when the feature needs new permissions, commands, or extension entry points
-4. Keep all functionality local and compatible with Chromium Manifest V3; preserve Firefox compatibility where practical
+4. Keep all functionality local and compatible with standard Chromium Manifest V3 APIs
 5. Reload the extension and test your feature thoroughly before submitting a PR
 
 ## Code Style Guidelines

@@ -8,10 +8,8 @@ const CONFIG = {
   MAX_IMPORT_BYTES: 1024 * 1024,
   MAX_IMPORT_ITEMS: 1000,
   MAX_TABS_PER_STASH: 500,
-  ALLOWED_SCHEMES: ['http:', 'https:', 'chrome-extension:', 'moz-extension:']
+  ALLOWED_SCHEMES: ['http:', 'https:', 'chrome-extension:']
 };
-
-const browserApi = globalThis.browser ?? globalThis.chrome;
 
 // State Management
 const state = {
@@ -22,7 +20,7 @@ const state = {
 
 // Storage Helpers
 const getStashItems = async () => {
-  const result = await browserApi.storage.local.get({ [CONFIG.STORAGE_KEY]: [] });
+  const result = await chrome.storage.local.get({ [CONFIG.STORAGE_KEY]: [] });
   return Array.isArray(result[CONFIG.STORAGE_KEY]) ? result[CONFIG.STORAGE_KEY] : [];
 };
 
@@ -30,7 +28,7 @@ const updateStashItems = (updater) => navigator.locks.request('stasher-storage',
   const items = await getStashItems();
   const updated = await updater(items);
   if (Array.isArray(updated)) {
-    await browserApi.storage.local.set({ [CONFIG.STORAGE_KEY]: updated });
+    await chrome.storage.local.set({ [CONFIG.STORAGE_KEY]: updated });
   }
   return updated;
 });
@@ -73,7 +71,7 @@ const iconMarkup = (name) =>
 loadStashes();
 
 // Listen for local storage changes to update UI
-browserApi.storage.onChanged.addListener((changes, namespace) => {
+chrome.storage.onChanged.addListener((changes, namespace) => {
   if (namespace === 'local' && changes[CONFIG.STORAGE_KEY]) {
     loadStashes();
   }
@@ -400,17 +398,17 @@ try {
     for (let i = 0; i < tabs.length; i += 5) {
       const batch = tabs.slice(i, i + 5);
       const created = await Promise.all(
-        batch.map(t => browserApi.tabs.create({ url: t.url, active: false }))
+        batch.map(t => chrome.tabs.create({ url: t.url, active: false }))
       );
       tabIds.push(...created.map(t => t.id));
     }
 
     if (item.type === 'group') {
       // 2. Create Group
-      const groupId = await browserApi.tabs.group({ tabIds });
+      const groupId = await chrome.tabs.group({ tabIds });
 
       // 3. Apply Properties
-      await browserApi.tabGroups.update(groupId, {
+      await chrome.tabGroups.update(groupId, {
         title: typeof item.title === 'string' ? item.title : '',
         color: safeColor(item.color),
         collapsed: false

@@ -52,9 +52,6 @@ function runBackground(options = {}) {
       setBadgeBackgroundColor: async details => badges.push(['color', clone(details)]),
       onClicked: eventSlot(listeners, 'actionClicked')
     },
-    commands: {
-      onCommand: eventSlot(listeners, 'command')
-    },
     tabGroups: {
       TAB_GROUP_ID_NONE: -1,
       get: async () => clone(options.group ?? {
@@ -288,10 +285,9 @@ test('stashes a tab group through the Chromium extension API', async () => {
   assert.deepEqual(result.badges.at(-2), ['text', { text: '1' }]);
 });
 
-test('stashes eligible loose tabs through the Chromium extension API', async () => {
+test('stashes eligible loose tabs through the toolbar action', async () => {
   const managerUrl = 'chrome-extension://stasher/src/manager/manager.html';
   const result = runBackground({
-    activeTabs: [{ id: 21, windowId: 4, groupId: -1, url: 'https://one.example' }],
     looseTabs: [
       { id: 21, title: 'One', url: 'https://one.example' },
       { id: 22, title: 'Two', url: 'http://two.example' },
@@ -304,7 +300,12 @@ test('stashes eligible loose tabs through the Chromium extension API', async () 
     windowTabs: [{ id: 90, url: managerUrl, pinned: true }]
   });
 
-  await result.listeners.command('stash-tabs');
+  await result.listeners.actionClicked({
+    id: 21,
+    windowId: 4,
+    groupId: -1,
+    url: 'https://one.example'
+  });
 
   assert.deepEqual(result.getItems()[0].tabs, [
     { title: 'One', url: 'https://one.example' },
@@ -639,4 +640,12 @@ test('manifest defines a Chromium MV3 service worker', () => {
     'src/background/service-worker.js'
   );
   assert.equal(manifest.permissions.includes('contextMenus'), false);
+});
+
+test('manifest defines one browser-managed action shortcut and no options page', () => {
+  const manifest = JSON.parse(readFileSync(join(root, 'manifest.json'), 'utf8'));
+
+  assert.equal(manifest.options_ui, undefined);
+  assert.deepEqual(Object.keys(manifest.commands), ['_execute_action']);
+  assert.equal(manifest.commands._execute_action.suggested_key, 'Alt+Shift+S');
 });

@@ -16,16 +16,12 @@
     "default_title": "Click to Stash"
   },
   "commands": {
-    "stash-tabs": {
-      "description": "Stash current tabs"
+    "_execute_action": {
+      "suggested_key": "Alt+Shift+S"
     }
   },
   "background": {
     "service_worker": "src/background/service-worker.js"
-  },
-  "options_ui": {
-    "page": "src/manager/manager.html",
-    "open_in_tab": true
   },
   "icons": {
     "16": "assets/icon_16.png",

@@ -126,7 +126,7 @@ const filterStashableTabs = (tabs) => {
 };
 
 /**
- * Stash logic shared by the toolbar action and keyboard shortcut.
+ * Stashes tabs from the toolbar action or its browser-managed shortcut.
  * @param {object} tab - The tab whose context (window/group) drives the stash.
  */
 const handleStash = async (tab) => {
@@ -211,9 +211,3 @@ const handleStash = async (tab) => {
 };
 
 chrome.action.onClicked.addListener(handleStash);
-
-chrome.commands.onCommand.addListener(async (command) => {
-  if (command !== 'stash-tabs') return;
-  const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-  if (tab) await handleStash(tab);
-});

@@ -80,8 +80,6 @@ const processStash = async (stashData, tabsToRemove, windowId) => {
     if (tabsToRemove.length > 0 && stashData) {
       await chrome.tabs.remove(tabsToRemove.map(t => t.id));
     }
-
-    await updateBadge();
   } catch (error) {
     console.error("Error processing stash:", error);
   }
@@ -93,11 +91,7 @@ chrome.storage.onChanged.addListener((changes, namespace) => {
     updateBadge();
   }
 });
-
-
-chrome.runtime.onInstalled.addListener(() => {
-  updateBadge();
-});
+chrome.runtime.onInstalled.addListener(updateBadge);
 chrome.runtime.onStartup.addListener(updateBadge);
 
 /**

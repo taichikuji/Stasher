@@ -282,6 +282,14 @@ test('stashes a tab group through the Chromium extension API', async () => {
     pinned: true,
     active: true
   }]);
+});
+
+test('updates the badge when stash storage changes', async () => {
+  const result = runBackground({ items: [{ id: 'saved-stash' }] });
+
+  result.listeners.storageChanged({ stashedItems: {} }, 'local');
+  await new Promise(resolve => setImmediate(resolve));
+
   assert.deepEqual(result.badges.at(-2), ['text', { text: '1' }]);
 });
 

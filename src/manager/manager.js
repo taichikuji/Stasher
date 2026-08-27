@@ -633,6 +633,70 @@ function normalizeImportedItem(item) {
   };
 }
 
+function parseUrlListText(text) {
+  const groups = String(text)
+    .trim()
+    .split(/\r?\n\s*\r?\n+/);
+  const items = [];
+  let skipped = 0;
+
+  for (const group of groups) {
+    const tabs = [];
+    for (const rawLine of group.split(/\r?\n/)) {
+      const line = rawLine.trim();
+      if (!line) continue;
+
+      const separatorIndex = line.indexOf(' | ');
+      const url = (separatorIndex === -1 ? line : line.slice(0, separatorIndex)).trim();
+      const suppliedTitle = separatorIndex === -1 ? '' : line.slice(separatorIndex + 3).trim();
+
+      if (!isAllowedTabUrl(url)) {
+        skipped += 1;
+        continue;
+      }
+
+      tabs.push({
+        url,
+        title: (suppliedTitle || url).slice(0, CONFIG.MAX_TITLE_LENGTH)
+      });
+    }
+
+    for (let index = 0; index < tabs.length; index += CONFIG.MAX_TABS_PER_STASH) {
+      items.push({
+        id: crypto.randomUUID(),
+        timestamp: new Date().toISOString(),
+        type: 'loose',
+        title: 'Imported Tabs',
+        color: 'grey',
+        tabs: tabs.slice(index, index + CONFIG.MAX_TABS_PER_STASH)
+      });
+    }
+  }
+
+  return { items, skipped };
+}
+
+function parseImportedContent(text) {
+  try {
+    const data = JSON.parse(text);
+    if (!Array.isArray(data)) {
+      return { error: 'Invalid Stasher JSON: expected an array.' };
+    }
+    if (data.length > CONFIG.MAX_IMPORT_ITEMS) {
+      return { error: 'Import contains too many stash items.' };
+    }
+
+    const items = data.filter(isValidStashItem).map(normalizeImportedItem);
+    return { items, skipped: data.length - items.length };
+  } catch {
+    const parsed = parseUrlListText(text);
+    if (parsed.items.length > CONFIG.MAX_IMPORT_ITEMS) {
+      return { error: 'Import contains too many stash items.' };
+    }
+    return parsed;
+  }
+}
+
 async function handleImport(event) {
   const file = event.target.files[0];
   if (!file) return;
@@ -643,19 +707,13 @@ async function handleImport(event) {
   }
 
   try {
-    const importedData = JSON.parse(await file.text());
-    if (!Array.isArray(importedData)) {
-      showInfoToast('Invalid format: expected an array.');
-      return;
-    }
-    if (importedData.length > CONFIG.MAX_IMPORT_ITEMS) {
-      showInfoToast('Import contains too many stash items.');
+    const parsed = parseImportedContent(await file.text());
+    if (parsed.error) {
+      showInfoToast(parsed.error);
       return;
     }
 
-    const valid = importedData
-      .filter(isValidStashItem)
-      .map(normalizeImportedItem);
+    const valid = parsed.items;
     if (valid.length === 0) {
       showInfoToast('No valid stash items found in file.');
       return;
@@ -672,10 +730,13 @@ async function handleImport(event) {
       return unique;
     });
 
-    showInfoToast(`Imported ${added} new stash${added !== 1 ? 'es' : ''}.`);
+    const skippedMessage = parsed.skipped > 0
+      ? ` Skipped ${parsed.skipped} invalid entr${parsed.skipped === 1 ? 'y' : 'ies'}.`
+      : '';
+    showInfoToast(`Imported ${added} new stash${added !== 1 ? 'es' : ''}.${skippedMessage}`);
   } catch (err) {
     console.error("Import error:", err);
-    showInfoToast('Error parsing JSON file.');
+    showInfoToast('Could not import this file.');
   } finally {
     // Reset so the same file can be re-imported
     event.target.value = '';

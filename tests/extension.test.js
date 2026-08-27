@@ -379,7 +379,7 @@ test('stashes only highlighted tabs and preserves a shared tab group', async () 
   assert.deepEqual(result.removedTabs, [31, 32]);
 });
 
-test('stashes an eligible mixed selection without closing excluded tabs', async () => {
+test('stashes an eligible mixed selection as ungrouped without closing excluded tabs', async () => {
   const result = runBackground({
     highlightedTabs: [
       { id: 41, title: 'Grouped', url: 'https://grouped.example', groupId: 7 },
@@ -392,7 +392,7 @@ test('stashes an eligible mixed selection without closing excluded tabs', async 
   await result.listeners.actionClicked({ windowId: 4, groupId: -1 });
 
   assert.equal(result.getItems()[0].type, 'loose');
-  assert.equal(result.getItems()[0].title, 'Selected Tabs');
+  assert.equal(result.getItems()[0].title, 'Ungrouped Tabs');
   assert.deepEqual(result.getItems()[0].tabs, [
     { title: 'Grouped', url: 'https://grouped.example' },
     { title: 'Loose', url: 'https://loose.example' }

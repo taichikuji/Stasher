@@ -35,9 +35,9 @@ The tests execute Stasher's background and manager scripts against Chromium's
 standard `chrome.*` extension API namespace; despite its name, that namespace
 is shared by compatible Chromium-based browsers. Before releasing, test Chrome
 and at least one other Chromium-based browser such as Brave or Edge. Verify
-toolbar and keyboard stashing; badge updates; grouped and loose-tab restoration;
-title and color preservation; import and export; and behavior after restarting
-each browser.
+toolbar, keyboard, and tab-context-menu stashing; badge updates; grouped and
+loose-tab restoration; title and color preservation; import and export; and
+behavior after restarting each browser.
 
 ## Description
 
@@ -70,6 +70,7 @@ Other features are:
 * Dark/Light mode
 * Ability to edit the tab groups title and color after it has been stashed
 * Stash exactly the tabs selected in Chromium's tab strip
+* Stash one web tab from its **Stash this tab** right-click action
 * Search saved groups by group title, tab title, or URL
 * Import Stasher JSON backups or `URL | title` text exports
 * Completely local and connectivity-agnostic.

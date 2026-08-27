@@ -447,8 +447,6 @@ async function restoreGroup(item) {
         color: safeColor(item.color),
         collapsed: false
       });
-
-      // Chrome 145 workaround: see fc42161032708ada098ab69c095ec945823fcffe; its removal is the following commit.
     }
 
     // 4. Cleanup Storage. Await this so a successful restore cannot silently

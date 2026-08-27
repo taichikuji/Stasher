@@ -134,6 +134,26 @@ body {
   font-size: 11px;
 }
 
+.search-area {
+  flex: 1;
+  max-width: 420px;
+  margin: 0 24px;
+}
+
+.search-input {
+  width: 100%;
+  padding: 8px 12px;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  background: var(--base);
+  color: var(--text);
+  font: inherit;
+}
+
+.search-input::placeholder {
+  color: var(--subtext0);
+}
+
 button {
   cursor: pointer;
   padding: 8px 16px;
@@ -493,11 +513,19 @@ button.danger:hover { background-color: color-mix(in srgb, var(--red) 12%, trans
   }
 
   .header {
+    flex-wrap: wrap;
     gap: 12px;
   }
 
   .brand p {
     display: none;
+  }
+
+  .search-area {
+    order: 3;
+    flex-basis: 100%;
+    max-width: none;
+    margin: 0;
   }
 
   .card-header {

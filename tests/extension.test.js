@@ -320,7 +320,8 @@ test('registers the tab menu and stashes exactly the right-clicked tab', async (
     documentUrlPatterns: ['http://*/*', 'https://*/*']
   }]);
   assert.equal(result.getItems()[0].type, 'loose');
-  assert.equal(result.getItems()[0].title, 'Pinned page');
+  assert.equal('title' in result.getItems()[0], false);
+  assert.equal('color' in result.getItems()[0], false);
   assert.deepEqual(result.getItems()[0].tabs, [{
     title: 'Pinned page',
     url: 'https://pinned.example'
@@ -392,7 +393,8 @@ test('stashes an eligible mixed selection as ungrouped without closing excluded 
   await result.listeners.actionClicked({ windowId: 4, groupId: -1 });
 
   assert.equal(result.getItems()[0].type, 'loose');
-  assert.equal(result.getItems()[0].title, 'Ungrouped Tabs');
+  assert.equal('title' in result.getItems()[0], false);
+  assert.equal('color' in result.getItems()[0], false);
   assert.deepEqual(result.getItems()[0].tabs, [
     { title: 'Grouped', url: 'https://grouped.example' },
     { title: 'Loose', url: 'https://loose.example' }

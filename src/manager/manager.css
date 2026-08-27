@@ -147,6 +147,7 @@ button {
 }
 
 button:hover { background-color: light-dark(var(--surface0), var(--surface1)); }
+button:disabled { cursor: wait; opacity: 0.55; }
 button.primary { color: var(--blue); }
 button.primary:hover { background-color: color-mix(in srgb, var(--blue) 12%, transparent); }
 button.danger { color: var(--red); }

@@ -140,8 +140,33 @@ const handleStash = async (tab) => {
     let groupColor = "grey";
     let stashType = 'loose';
 
+    // Chromium allows users to highlight multiple tabs in the tab strip. When
+    // they do, that explicit selection takes precedence over the usual
+    // group-or-loose-tabs behavior.
+    const highlightedTabs = await chrome.tabs.query({
+      windowId: currentWindowId,
+      highlighted: true
+    });
+
+    if (highlightedTabs.length > 1) {
+      tabsToStash = filterStashableTabs(highlightedTabs);
+      groupTitle = "Selected Tabs";
+
+      const selectedGroupIds = new Set(tabsToStash.map(t => t.groupId));
+      if (
+        selectedGroupIds.size === 1 &&
+        !selectedGroupIds.has(chrome.tabGroups.TAB_GROUP_ID_NONE)
+      ) {
+        const [selectedGroupId] = selectedGroupIds;
+        const group = await chrome.tabGroups.get(selectedGroupId);
+        stashType = 'group';
+        groupTitle = group.title || "Untitled Group";
+        groupColor = group.color;
+      }
+    }
+
     // Scenario 1: Stash a specific Tab Group
-    if (currentGroupId !== chrome.tabGroups.TAB_GROUP_ID_NONE) {
+    else if (currentGroupId !== chrome.tabGroups.TAB_GROUP_ID_NONE) {
       const group = await chrome.tabGroups.get(currentGroupId);
       const tabsInGroup = await chrome.tabs.query({ groupId: currentGroupId });
 

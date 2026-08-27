@@ -55,19 +55,11 @@ const openManager = async (windowId) => {
  * Saves a stash item to local storage.
  * @param {Object} dataItem - The stash item to save.
  */
-const saveToStorage = async (dataItem) => {
-  try {
-    await navigator.locks.request('stasher-storage', async () => {
-      const result = await chrome.storage.local.get({ [CONFIG.STORAGE_KEY]: [] });
-      const items = Array.isArray(result[CONFIG.STORAGE_KEY]) ? result[CONFIG.STORAGE_KEY] : [];
-      // Add new item to the beginning of the list
-      await chrome.storage.local.set({ [CONFIG.STORAGE_KEY]: [dataItem, ...items] });
-    });
-  } catch (error) {
-    console.error("Error saving to storage:", error);
-    throw error; // Re-throw to be handled by caller
-  }
-};
+const saveToStorage = (dataItem) => navigator.locks.request('stasher-storage', async () => {
+  const result = await chrome.storage.local.get({ [CONFIG.STORAGE_KEY]: [] });
+  const items = Array.isArray(result[CONFIG.STORAGE_KEY]) ? result[CONFIG.STORAGE_KEY] : [];
+  await chrome.storage.local.set({ [CONFIG.STORAGE_KEY]: [dataItem, ...items] });
+});
 
 /**
  * Processes the stashing operation: saves data, opens manager, and removes tabs.

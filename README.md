@@ -41,6 +41,10 @@ each browser.
 
 ## Description
 
+Stasher is, by design, opinionated. This means that certain configurations are assumed, while others may change depending on feedback. The purpose of this extension is not to be a fit-all extension, but rather an extension that does the things it does the best way it can, while keeping things minimal, and simple to understand.
+
+> Note: Nonetheless, if sensible changes are suggested, I will discuss and implement them if deemed sensible and checks out with the project's healthiness. Already performed this a few times during the lifespan of Stasher!
+
 At this time ( I will update this as it goes ) it does the following:
 
 ### Functionality

@@ -198,6 +198,11 @@ button.danger:hover { background-color: color-mix(in srgb, var(--red) 12%, trans
   color: var(--text);
 }
 
+.header-actions .help-link {
+  text-decoration: none;
+  font-weight: 700;
+}
+
 .header-actions .danger,
 .header-actions .danger:hover {
   color: var(--red);

@@ -30,6 +30,7 @@ function runBackground(options = {}) {
   const updatedTabs = [];
   const removedTabs = [];
   const badges = [];
+  const contextMenus = [];
   let items = clone(options.items ?? []);
 
   const api = {
@@ -51,6 +52,10 @@ function runBackground(options = {}) {
       setBadgeText: async details => badges.push(['text', clone(details)]),
       setBadgeBackgroundColor: async details => badges.push(['color', clone(details)]),
       onClicked: eventSlot(listeners, 'actionClicked')
+    },
+    contextMenus: {
+      create: details => contextMenus.push(clone(details)),
+      onClicked: eventSlot(listeners, 'contextMenuClicked')
     },
     tabGroups: {
       TAB_GROUP_ID_NONE: -1,
@@ -103,6 +108,7 @@ function runBackground(options = {}) {
     updatedTabs,
     removedTabs,
     badges,
+    contextMenus,
     getItems: () => clone(items)
   };
 }
@@ -291,6 +297,35 @@ test('updates the badge when stash storage changes', async () => {
   await new Promise(resolve => setImmediate(resolve));
 
   assert.deepEqual(result.badges.at(-2), ['text', { text: '1' }]);
+});
+
+test('registers the tab menu and stashes exactly the right-clicked tab', async () => {
+  const result = runBackground();
+  const tab = {
+    id: 51,
+    title: 'Pinned page',
+    url: 'https://pinned.example',
+    windowId: 4,
+    groupId: 7,
+    pinned: true
+  };
+
+  result.listeners.installed();
+  await result.listeners.contextMenuClicked({ menuItemId: 'stash-tab' }, tab);
+
+  assert.deepEqual(result.contextMenus, [{
+    id: 'stash-tab',
+    title: 'Stash this tab',
+    contexts: ['tab'],
+    documentUrlPatterns: ['http://*/*', 'https://*/*']
+  }]);
+  assert.equal(result.getItems()[0].type, 'loose');
+  assert.equal(result.getItems()[0].title, 'Pinned page');
+  assert.deepEqual(result.getItems()[0].tabs, [{
+    title: 'Pinned page',
+    url: 'https://pinned.example'
+  }]);
+  assert.deepEqual(result.removedTabs, [51]);
 });
 
 test('stashes eligible loose tabs through the toolbar action', async () => {
@@ -647,7 +682,7 @@ test('manifest defines a Chromium MV3 service worker', () => {
     manifest.background.service_worker,
     'src/background/service-worker.js'
   );
-  assert.equal(manifest.permissions.includes('contextMenus'), false);
+  assert.equal(manifest.permissions.includes('contextMenus'), true);
 });
 
 test('manifest defines one browser-managed action shortcut and no options page', () => {

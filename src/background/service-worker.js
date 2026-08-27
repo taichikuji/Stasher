@@ -2,6 +2,7 @@
 const CONFIG = {
   MANAGER_PATH: 'src/manager/manager.html',
   STORAGE_KEY: 'stashedItems',
+  TAB_MENU_ID: 'stash-tab',
   IGNORED_URLS: [
     'chrome://newtab/',
     'about:blank'
@@ -91,17 +92,30 @@ chrome.storage.onChanged.addListener((changes, namespace) => {
     updateBadge();
   }
 });
-chrome.runtime.onInstalled.addListener(updateBadge);
+chrome.runtime.onInstalled.addListener(() => {
+  updateBadge();
+  chrome.contextMenus.create({
+    id: CONFIG.TAB_MENU_ID,
+    title: 'Stash this tab',
+    contexts: ['tab'],
+    documentUrlPatterns: ['http://*/*', 'https://*/*']
+  });
+});
 chrome.runtime.onStartup.addListener(updateBadge);
 
 /**
  * Helper to filter valid tabs for stashing.
  * @param {object[]} tabs - The list of tabs to filter.
+ * @param {boolean} allowPinned - Whether an explicitly selected pinned tab is allowed.
  * @returns {object[]} Filtered list of tabs.
  */
-const filterStashableTabs = (tabs) => {
+const filterStashableTabs = (tabs, allowPinned = false) => {
   return tabs.filter(t => {
-    if (t.pinned || t.url === MANAGER_URL || CONFIG.IGNORED_URLS.includes(t.url)) return false;
+    if (
+      (!allowPinned && t.pinned) ||
+      t.url === MANAGER_URL ||
+      CONFIG.IGNORED_URLS.includes(t.url)
+    ) return false;
     try {
       const scheme = new URL(t.url).protocol;
       return CONFIG.ALLOWED_SCHEMES.includes(scheme);
@@ -109,6 +123,21 @@ const filterStashableTabs = (tabs) => {
       return false;
     }
   });
+};
+
+const handleSingleTabStash = async (tab) => {
+  const [tabToStash] = filterStashableTabs([tab], true);
+  if (!tabToStash) return;
+
+  const title = tabToStash.title || tabToStash.url;
+  await processStash({
+    id: crypto.randomUUID(),
+    timestamp: new Date().toISOString(),
+    type: 'loose',
+    title,
+    color: 'grey',
+    tabs: [{ title, url: tabToStash.url }]
+  }, [tabToStash], tabToStash.windowId);
 };
 
 /**
@@ -197,3 +226,9 @@ const handleStash = async (tab) => {
 };
 
 chrome.action.onClicked.addListener(handleStash);
+
+chrome.contextMenus.onClicked.addListener(async (info, tab) => {
+  if (info.menuItemId === CONFIG.TAB_MENU_ID && tab) {
+    await handleSingleTabStash(tab);
+  }
+});

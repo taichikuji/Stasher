@@ -15,7 +15,8 @@ const CONFIG = {
 const state = {
   undoStack: [],
   undoTimeout: null,
-  infoTimeout: null
+  infoTimeout: null,
+  restoringIds: new Set()
 };
 
 // Storage Helpers
@@ -275,7 +276,11 @@ function renderViewMode(container, item) {
   btnRestore.innerHTML = iconMarkup('restore');
   btnRestore.title = 'Restore all tabs';
   btnRestore.setAttribute('aria-label', `Restore all tabs from ${item.title || 'stash'}`);
-  btnRestore.onclick = () => restoreGroup(item);
+  btnRestore.onclick = async () => {
+    btnRestore.disabled = true;
+    await restoreGroup(item);
+    btnRestore.disabled = false;
+  };
 
   const btnDelete = document.createElement('button');
   btnDelete.className = 'danger icon-only';
@@ -389,12 +394,15 @@ async function updateStashData(id, newTitle, newColor) {
 }
 
 async function restoreGroup(item) {
-try {
+  if (!item?.id || state.restoringIds.has(item.id)) return;
+  state.restoringIds.add(item.id);
+  const tabIds = [];
+
+  try {
     const tabs = Array.isArray(item.tabs) ? item.tabs.filter(t => isAllowedTabUrl(t.url)) : [];
     if (tabs.length === 0) return;
 
     // 1. Create Tabs (in batches of 5 to avoid overwhelming the browser)
-    const tabIds = [];
     for (let i = 0; i < tabs.length; i += 5) {
       const batch = tabs.slice(i, i + 5);
       const created = await Promise.all(
@@ -417,13 +425,18 @@ try {
       // Chrome 145 workaround: see fc42161032708ada098ab69c095ec945823fcffe; its removal is the following commit.
     }
 
-    // 4. Cleanup Storage
-    // We do not fully await this because we want to delete it in the background while the user sees their tabs
-    deleteStash(item.id, { undo: false })
-      .catch(err => console.error("Error deleting after restore:", err));
+    // 4. Cleanup Storage. Await this so a successful restore cannot silently
+    // leave a second, apparently unrestored copy behind.
+    const deleted = await deleteStash(item.id, { undo: false });
+    if (!deleted) throw new Error('Restored stash was not found during cleanup');
 
   } catch (error) {
     console.error("Error restoring group:", error);
+    showInfoToast(tabIds.length
+      ? 'Tabs were opened, but the saved stash could not be removed. It was kept to avoid data loss.'
+      : 'Could not restore this stash. Your saved tabs were kept.');
+  } finally {
+    state.restoringIds.delete(item.id);
   }
 }
 
@@ -445,8 +458,11 @@ async function deleteStash(id, { undo = true } = {}) {
 
     // 4. Show the Undo Toast
     if (deleted && undo) showUndoToast();
+    return deleted;
   } catch (error) {
     console.error("Error deleting stash:", error);
+    if (!undo) throw error;
+    return false;
   }
 }
 

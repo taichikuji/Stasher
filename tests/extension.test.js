@@ -112,9 +112,15 @@ function runBackground(options = {}) {
 
 function createElement(initialClasses = []) {
   const classes = new Set(initialClasses);
-  return {
-    append() {},
-    appendChild() {},
+  const element = {
+    children: [],
+    append(...children) {
+      this.children.push(...children);
+    },
+    appendChild(child) {
+      this.children.push(child);
+      return child;
+    },
     addEventListener() {},
     removeEventListener() {},
     setAttribute() {},
@@ -138,6 +144,11 @@ function createElement(initialClasses = []) {
       }
     }
   };
+  Object.defineProperty(element, 'innerHTML', {
+    get() { return ''; },
+    set() { element.children = []; }
+  });
+  return element;
 }
 
 function runManager(initialItems, options = {}) {
@@ -206,6 +217,12 @@ function runManager(initialItems, options = {}) {
     URL,
     clearTimeout() {},
     console: { error: (...args) => errors.push(args) },
+    crypto: {
+      randomUUID: (() => {
+        let id = 0;
+        return () => `imported-${++id}`;
+      })()
+    },
     document,
     navigator: {
       locks: {
@@ -435,6 +452,132 @@ test('keeps a stash when restoration fails before cleanup', async () => {
     assert.deepEqual(result.getItems(), [stash]);
     assert.equal(result.errors.length, 1);
   }
+});
+
+test('suppresses concurrent restores of the same stash', async () => {
+  const stash = {
+    id: 'restore-once',
+    type: 'loose',
+    tabs: [{ title: 'One', url: 'https://one.example' }]
+  };
+  const result = runManager([stash]);
+
+  await Promise.all([
+    vm.runInContext(`restoreGroup(${JSON.stringify(stash)})`, result.context),
+    vm.runInContext(`restoreGroup(${JSON.stringify(stash)})`, result.context)
+  ]);
+
+  assert.equal(result.createdTabs.length, 1);
+  assert.deepEqual(result.getItems(), []);
+});
+
+test('reports cleanup failure and retains the restored stash', async () => {
+  const stash = {
+    id: 'cleanup-fails',
+    type: 'loose',
+    tabs: [{ title: 'One', url: 'https://one.example' }]
+  };
+  const result = runManager([stash], { failStorageSetAt: 1 });
+
+  await vm.runInContext(`restoreGroup(${JSON.stringify(stash)})`, result.context);
+
+  assert.equal(result.createdTabs.length, 1);
+  assert.deepEqual(result.getItems(), [stash]);
+  assert.equal(result.getElement('info-toast').classList.contains('hidden'), false);
+  assert.match(result.getElement('info-msg').textContent, /kept to avoid data loss/i);
+});
+
+test('search matches stash titles, tab titles, and URLs', () => {
+  const result = runManager([]);
+  const stash = {
+    title: 'Research',
+    tabs: [{ title: 'Chromium docs', url: 'https://developer.chrome.com' }]
+  };
+
+  result.context.testStash = stash;
+  assert.equal(vm.runInContext("stashMatchesQuery(testStash, 'research')", result.context), true);
+  assert.equal(vm.runInContext("stashMatchesQuery(testStash, 'CHROMIUM')", result.context), true);
+  assert.equal(vm.runInContext("stashMatchesQuery(testStash, 'developer.chrome')", result.context), true);
+  assert.equal(vm.runInContext("stashMatchesQuery(testStash, 'missing')", result.context), false);
+});
+
+test('search renders an accessible no-results message without changing storage', async () => {
+  const stash = {
+    id: 'search-me',
+    title: 'Research',
+    tabs: [{ title: 'One', url: 'https://one.example' }]
+  };
+  const result = runManager([stash]);
+
+  result.getElement('searchInput').value = 'missing';
+  await vm.runInContext('loadStashes()', result.context);
+
+  assert.deepEqual(result.getItems(), [stash]);
+  assert.equal(result.getElement('stash-container').children.length, 1);
+  assert.equal(
+    result.getElement('stash-container').children[0].textContent,
+    'No stashes match your search.'
+  );
+});
+
+test('parses URL-list text into blank-line-separated stashes and skips invalid rows', () => {
+  const result = runManager([]);
+  result.context.importText = [
+    'https://one.example | One',
+    'not a URL | Invalid',
+    '',
+    'https://two.example/path | Two | With separator'
+  ].join('\n');
+
+  const parsed = clone(vm.runInContext('parseImportedContent(importText)', result.context));
+
+  assert.equal(parsed.skipped, 1);
+  assert.equal(parsed.items.length, 2);
+  assert.deepEqual(parsed.items.map(item => item.tabs), [
+    [{ url: 'https://one.example', title: 'One' }],
+    [{ url: 'https://two.example/path', title: 'Two | With separator' }]
+  ]);
+});
+
+test('imports compatible Stasher JSON while de-duplicating stash IDs', async () => {
+  const existing = {
+    id: 'same-id',
+    title: 'Existing',
+    tabs: [{ title: 'Existing', url: 'https://existing.example' }]
+  };
+  const imported = {
+    id: 'same-id',
+    title: 'Imported replacement',
+    tabs: [{ title: 'Imported', url: 'https://imported.example' }]
+  };
+  const newItem = {
+    id: 'new-id',
+    title: 'New',
+    tabs: [{ title: 'New', url: 'https://new.example' }]
+  };
+  const result = runManager([existing]);
+  result.context.importEvent = {
+    target: {
+      files: [{ size: 200, text: async () => JSON.stringify([imported, newItem]) }],
+      value: 'stasher.json'
+    }
+  };
+
+  await vm.runInContext('handleImport(importEvent)', result.context);
+
+  assert.equal(result.getItems().length, 2);
+  assert.equal(result.getItems().filter(item => item.id === 'same-id').length, 1);
+  assert.equal(result.getItems()[0].title, 'Imported replacement');
+  assert.equal(result.getItems()[1].id, 'new-id');
+});
+
+test('rejects Stasher JSON over the item limit', () => {
+  const result = runManager([]);
+  result.context.tooManyItems = JSON.stringify(Array.from({ length: 1001 }, () => ({})));
+
+  const parsed = clone(vm.runInContext('parseImportedContent(tooManyItems)', result.context));
+
+  assert.match(parsed.error, /too many stash items/i);
 });
 
 test('Delete All clears storage and pending Undo', async () => {

@@ -165,7 +165,6 @@ const handleStash = async (tab) => {
 
     if (highlightedTabs.length > 1) {
       tabsToStash = filterStashableTabs(highlightedTabs);
-      groupTitle = "Selected Tabs";
 
       const selectedGroupIds = new Set(tabsToStash.map(t => t.groupId));
       if (

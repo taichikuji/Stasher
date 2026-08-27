@@ -65,6 +65,9 @@ Other features are:
 
 * Dark/Light mode
 * Ability to edit the tab groups title and color after it has been stashed
+* Stash exactly the tabs selected in Chromium's tab strip
+* Search saved groups by group title, tab title, or URL
+* Import Stasher JSON backups or `URL | title` text exports
 * Completely local and connectivity-agnostic.
 * Ability to recover a tab or groupped tab shortly after it has been deleted
 

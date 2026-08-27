@@ -18,5 +18,5 @@ dist/
 *.zip
 .fallow/
 
-# Cursor skill
-.agent_brain.md
+# Codex skills
+.agents/

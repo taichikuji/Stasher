@@ -61,6 +61,7 @@ const elements = {
   exportBtn: document.getElementById('exportBtn'),
   importBtn: document.getElementById('importBtn'),
   importFile: document.getElementById('importFile'),
+  searchInput: document.getElementById('searchInput'),
   confirmModal: document.getElementById('confirm-modal'),
   confirmTitle: document.getElementById('confirm-title')
 };
@@ -94,7 +95,16 @@ async function loadStashes() {
       return;
     }
 
-    elements.container.append(...items.map(createStashCard));
+    const visibleItems = items.filter(item => stashMatchesQuery(item, elements.searchInput.value));
+    if (visibleItems.length === 0) {
+      const p = document.createElement('p');
+      p.className = 'empty-state';
+      p.textContent = 'No stashes match your search.';
+      elements.container.appendChild(p);
+      return;
+    }
+
+    elements.container.append(...visibleItems.map(createStashCard));
 
   } catch (error) {
     console.error("Error loading stashes:", error);
@@ -103,6 +113,22 @@ async function loadStashes() {
     p.textContent = 'Error loading content.';
     elements.container.appendChild(p);
   }
+}
+
+function stashMatchesQuery(item, query) {
+  const normalizedQuery = String(query || '').trim().toLocaleLowerCase();
+  if (!normalizedQuery) return true;
+
+  const searchableValues = [
+    item?.title,
+    ...(Array.isArray(item?.tabs)
+      ? item.tabs.flatMap(tab => [tab?.title, tab?.url])
+      : [])
+  ];
+
+  return searchableValues.some(value =>
+    typeof value === 'string' && value.toLocaleLowerCase().includes(normalizedQuery)
+  );
 }
 
 /**
@@ -677,6 +703,7 @@ function setupEventListeners() {
   elements.exportBtn.onclick = handleExport;
   elements.importBtn.onclick = () => elements.importFile.click();
   elements.importFile.onchange = handleImport;
+  elements.searchInput.oninput = loadStashes;
 }
 
 // Cat easter egg — deliberately isolated from application logic.

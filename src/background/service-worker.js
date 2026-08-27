@@ -125,45 +125,31 @@ const filterStashableTabs = (tabs, allowPinned = false) => {
   });
 };
 
-const handleSingleTabStash = async (tab) => {
-  const [tabToStash] = filterStashableTabs([tab], true);
-  if (!tabToStash) return;
-
-  const title = tabToStash.title || tabToStash.url;
-  await processStash({
-    id: crypto.randomUUID(),
-    timestamp: new Date().toISOString(),
-    type: 'loose',
-    title,
-    color: 'grey',
-    tabs: [{ title, url: tabToStash.url }]
-  }, [tabToStash], tabToStash.windowId);
-};
-
 /**
- * Stashes tabs from the toolbar action or its browser-managed shortcut.
+ * Stashes tabs using the tab's current browser context.
  * @param {object} tab - The tab whose context (window/group) drives the stash.
+ * @param {boolean} singleTab - Whether to stash only this tab.
  */
-const handleStash = async (tab) => {
+const handleStash = async (tab, singleTab = false) => {
   const currentWindowId = tab.windowId;
   const currentGroupId = tab.groupId;
 
   try {
     let stashData = null;
     let tabsToStash = [];
-    let groupTitle = "Ungrouped Tabs";
-    let groupColor = "grey";
-    let stashType = 'loose';
+    let tabGroup;
 
     // Chromium allows users to highlight multiple tabs in the tab strip. When
     // they do, that explicit selection takes precedence over the usual
     // group-or-loose-tabs behavior.
-    const highlightedTabs = await chrome.tabs.query({
+    const highlightedTabs = singleTab ? [] : await chrome.tabs.query({
       windowId: currentWindowId,
       highlighted: true
     });
 
-    if (highlightedTabs.length > 1) {
+    if (singleTab) {
+      tabsToStash = filterStashableTabs([tab], true);
+    } else if (highlightedTabs.length > 1) {
       tabsToStash = filterStashableTabs(highlightedTabs);
 
       const selectedGroupIds = new Set(tabsToStash.map(t => t.groupId));
@@ -172,23 +158,16 @@ const handleStash = async (tab) => {
         !selectedGroupIds.has(chrome.tabGroups.TAB_GROUP_ID_NONE)
       ) {
         const [selectedGroupId] = selectedGroupIds;
-        const group = await chrome.tabGroups.get(selectedGroupId);
-        stashType = 'group';
-        groupTitle = group.title || "Untitled Group";
-        groupColor = group.color;
+        tabGroup = await chrome.tabGroups.get(selectedGroupId);
       }
     }
 
     // Scenario 1: Stash a specific Tab Group
     else if (currentGroupId !== chrome.tabGroups.TAB_GROUP_ID_NONE) {
-      const group = await chrome.tabGroups.get(currentGroupId);
+      tabGroup = await chrome.tabGroups.get(currentGroupId);
       const tabsInGroup = await chrome.tabs.query({ groupId: currentGroupId });
 
       tabsToStash = filterStashableTabs(tabsInGroup);
-
-      stashType = 'group';
-      groupTitle = group.title || "Untitled Group";
-      groupColor = group.color;
     }
 
     // Scenario 2: Stash all "loose" (non-grouped) tabs in the window
@@ -205,14 +184,16 @@ const handleStash = async (tab) => {
       stashData = {
         id: crypto.randomUUID(),
         timestamp: new Date().toISOString(),
-        type: stashType,
-        title: groupTitle,
-        color: groupColor,
+        type: tabGroup ? 'group' : 'loose',
         tabs: tabsToStash.map(t => ({
-          title: t.title,
+          title: t.title || t.url,
           url: t.url
         }))
       };
+      if (tabGroup) {
+        stashData.title = tabGroup.title || "Untitled Group";
+        stashData.color = tabGroup.color;
+      }
     }
 
     // If stashData is null (no tabs found), processStash will just open the manager
@@ -228,6 +209,6 @@ chrome.action.onClicked.addListener(handleStash);
 
 chrome.contextMenus.onClicked.addListener(async (info, tab) => {
   if (info.menuItemId === CONFIG.TAB_MENU_ID && tab) {
-    await handleSingleTabStash(tab);
+    await handleStash(tab, true);
   }
 });

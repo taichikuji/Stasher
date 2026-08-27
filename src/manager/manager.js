@@ -492,18 +492,13 @@ async function deleteStash(id, { undo = true } = {}) {
   }
 }
 
-// Undo Toast
-function undoEntryLabel(entry) {
-  if (entry.kind === 'stash') return entry.item.title || 'Group';
-  return entry.label || 'Tab';
-}
-
 function showUndoToast() {
   const count = state.undoStack.length;
   if (count === 0) return;
 
   if (count === 1) {
-    const name = undoEntryLabel(state.undoStack[0]);
+    const entry = state.undoStack[0];
+    const name = entry.kind === 'stash' ? entry.item.title || 'Group' : entry.label || 'Tab';
     elements.undoMsg.textContent = `Deleted "${name.substring(0, 20)}${name.length > 20 ? '...' : ''}"`;
   } else {
     elements.undoMsg.textContent = `${count} items deleted`;

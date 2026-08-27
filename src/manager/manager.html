@@ -10,6 +10,9 @@
 <body>
 
   <svg class="icon-sprite" aria-hidden="true">
+    <symbol id="icon-help" viewBox="2 2 20 20">
+      <path d="M9.1 9a3 3 0 1 1 4.9 2.3c-1.2.9-2 1.4-2 2.7M12 17h.01M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18Z" />
+    </symbol>
     <symbol id="icon-export" viewBox="3 3 18 18">
       <path d="M19 15v2a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2v-2M12 15V5m0 0 2 2m-2-2-2 2" />
     </symbol>
@@ -52,7 +55,7 @@
       <input id="searchInput" class="search-input" type="search" placeholder="Search saved tabs" autocomplete="off">
     </div>
     <div class="header-actions" role="group" aria-label="Stash actions">
-      <a class="icon-button help-link" href="https://github.com/taichikuji/Stasher/wiki/How-to-use-Stasher" target="_blank" rel="noopener noreferrer" aria-label="How to use Stasher" title="How to use Stasher">?</a>
+      <a class="icon-button" href="https://github.com/taichikuji/Stasher/wiki/How-to-use-Stasher" target="_blank" rel="noopener noreferrer" aria-label="How to use Stasher" title="How to use Stasher"><svg class="button-icon" aria-hidden="true"><use href="#icon-help"></use></svg></a>
       <button id="catBtn" class="icon-button" type="button" aria-label="Release a cat" title="Release a cat">🐈</button>
       <button id="exportBtn" class="icon-button" type="button" aria-label="Export stashes" title="Export stashes"><svg class="button-icon" aria-hidden="true"><use href="#icon-export"></use></svg></button>
       <input type="file" id="importFile" accept=".json,.txt,application/json,text/plain" class="visually-hidden">

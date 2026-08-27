@@ -64,6 +64,7 @@ function runBackground(options = {}) {
     },
     tabs: {
       query: async query => {
+        if (query.highlighted) return clone(options.highlightedTabs ?? []);
         if (query.groupId === 7) return clone(options.groupedTabs ?? []);
         if (query.groupId === -1) return clone(options.looseTabs ?? []);
         if (query.active) return clone(options.activeTabs ?? []);
@@ -295,6 +296,47 @@ test('stashes eligible loose tabs through the Chromium extension API', async () 
   assert.deepEqual(result.removedTabs, [21, 22]);
   assert.deepEqual(result.createdTabs, []);
   assert.deepEqual(result.updatedTabs, [{ id: 90, active: true, pinned: true }]);
+});
+
+test('stashes only highlighted tabs and preserves a shared tab group', async () => {
+  const result = runBackground({
+    highlightedTabs: [
+      { id: 31, title: 'One', url: 'https://one.example', groupId: 7 },
+      { id: 32, title: 'Two', url: 'https://two.example', groupId: 7 }
+    ]
+  });
+
+  await result.listeners.actionClicked({ windowId: 4, groupId: 7 });
+
+  assert.equal(result.getItems()[0].type, 'group');
+  assert.equal(result.getItems()[0].title, 'Work');
+  assert.equal(result.getItems()[0].color, 'blue');
+  assert.deepEqual(result.getItems()[0].tabs, [
+    { title: 'One', url: 'https://one.example' },
+    { title: 'Two', url: 'https://two.example' }
+  ]);
+  assert.deepEqual(result.removedTabs, [31, 32]);
+});
+
+test('stashes an eligible mixed selection without closing excluded tabs', async () => {
+  const result = runBackground({
+    highlightedTabs: [
+      { id: 41, title: 'Grouped', url: 'https://grouped.example', groupId: 7 },
+      { id: 42, title: 'Loose', url: 'https://loose.example', groupId: -1 },
+      { id: 43, title: 'Pinned', url: 'https://pinned.example', groupId: -1, pinned: true },
+      { id: 44, title: 'Internal', url: 'chrome://settings/', groupId: -1 }
+    ]
+  });
+
+  await result.listeners.actionClicked({ windowId: 4, groupId: -1 });
+
+  assert.equal(result.getItems()[0].type, 'loose');
+  assert.equal(result.getItems()[0].title, 'Selected Tabs');
+  assert.deepEqual(result.getItems()[0].tabs, [
+    { title: 'Grouped', url: 'https://grouped.example' },
+    { title: 'Loose', url: 'https://loose.example' }
+  ]);
+  assert.deepEqual(result.removedTabs, [41, 42]);
 });
 
 test('undoes explicit stash deletion through the Chromium extension API', async () => {

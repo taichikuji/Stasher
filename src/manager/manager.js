@@ -697,6 +697,12 @@ function setupEventListeners() {
   elements.importBtn.onclick = () => elements.importFile.click();
   elements.importFile.onchange = handleImport;
   elements.searchInput.oninput = loadStashes;
+  document.addEventListener('keydown', event => {
+    if (event.key === 'f' && (event.metaKey || event.ctrlKey)) {
+      event.preventDefault();
+      elements.searchInput.focus();
+    }
+  });
 }
 
 // Cat easter egg — deliberately isolated from application logic.

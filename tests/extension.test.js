@@ -156,6 +156,7 @@ function createElement(initialClasses = []) {
 
 function runManager(initialItems, options = {}) {
   const listeners = {};
+  const documentListeners = {};
   const createdTabs = [];
   const errors = [];
   const groupedTabs = [];
@@ -201,6 +202,9 @@ function runManager(initialItems, options = {}) {
 
   const document = {
     activeElement: null,
+    addEventListener(name, listener) {
+      documentListeners[name] = listener;
+    },
     getElementById(id) {
       if (!elements.has(id)) {
         const initialClasses = id === 'undo-toast' || id === 'info-toast' ? ['hidden'] : [];
@@ -243,6 +247,7 @@ function runManager(initialItems, options = {}) {
     groupedTabs,
     updatedGroups,
     getElement: id => elements.get(id),
+    triggerDocumentEvent: (name, event) => documentListeners[name](event),
     getItems: () => clone(items)
   };
 }
@@ -539,6 +544,27 @@ test('search matches stash titles, tab titles, and URLs', () => {
   assert.equal(vm.runInContext("stashMatchesQuery(testStash, 'CHROMIUM')", result.context), true);
   assert.equal(vm.runInContext("stashMatchesQuery(testStash, 'developer.chrome')", result.context), true);
   assert.equal(vm.runInContext("stashMatchesQuery(testStash, 'missing')", result.context), false);
+});
+
+test('Cmd+F and Ctrl+F focus the Stasher search input', () => {
+  const result = runManager([]);
+  const searchInput = result.getElement('searchInput');
+  let focusCount = 0;
+  let prevented = 0;
+  searchInput.focus = () => { focusCount += 1; };
+
+  for (const event of [
+    { key: 'f', metaKey: true, ctrlKey: false },
+    { key: 'f', metaKey: false, ctrlKey: true }
+  ]) {
+    result.triggerDocumentEvent('keydown', {
+      ...event,
+      preventDefault: () => { prevented += 1; }
+    });
+  }
+
+  assert.equal(focusCount, 2);
+  assert.equal(prevented, 2);
 });
 
 test('search renders an accessible no-results message without changing storage', async () => {

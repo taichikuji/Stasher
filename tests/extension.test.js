@@ -220,12 +220,6 @@ function runManager(initialItems, options = {}) {
     URL,
     clearTimeout() {},
     console: { error: (...args) => errors.push(args) },
-    crypto: {
-      randomUUID: (() => {
-        let id = 0;
-        return () => `imported-${++id}`;
-      })()
-    },
     document,
     navigator: {
       locks: {
@@ -566,25 +560,6 @@ test('search renders an accessible no-results message without changing storage',
   );
 });
 
-test('parses URL-list text into blank-line-separated stashes and skips invalid rows', () => {
-  const result = runManager([]);
-  result.context.importText = [
-    'https://one.example | One',
-    'not a URL | Invalid',
-    '',
-    'https://two.example/path | Two | With separator'
-  ].join('\n');
-
-  const parsed = clone(vm.runInContext('parseImportedContent(importText)', result.context));
-
-  assert.equal(parsed.skipped, 1);
-  assert.equal(parsed.items.length, 2);
-  assert.deepEqual(parsed.items.map(item => item.tabs), [
-    [{ url: 'https://one.example', title: 'One' }],
-    [{ url: 'https://two.example/path', title: 'Two | With separator' }]
-  ]);
-});
-
 test('imports compatible Stasher JSON while de-duplicating stash IDs', async () => {
   const existing = {
     id: 'same-id',
@@ -617,13 +592,21 @@ test('imports compatible Stasher JSON while de-duplicating stash IDs', async () 
   assert.equal(result.getItems()[1].id, 'new-id');
 });
 
-test('rejects Stasher JSON over the item limit', () => {
+test('rejects Stasher JSON over the item limit', async () => {
   const result = runManager([]);
-  result.context.tooManyItems = JSON.stringify(Array.from({ length: 1001 }, () => ({})));
+  result.context.importEvent = {
+    target: {
+      files: [{
+        size: 200,
+        text: async () => JSON.stringify(Array.from({ length: 1001 }, () => ({})))
+      }],
+      value: 'stasher.json'
+    }
+  };
 
-  const parsed = clone(vm.runInContext('parseImportedContent(tooManyItems)', result.context));
+  await vm.runInContext('handleImport(importEvent)', result.context);
 
-  assert.match(parsed.error, /too many stash items/i);
+  assert.match(result.getElement('info-msg').textContent, /too many stash items/i);
 });
 
 test('Delete All clears storage and pending Undo', async () => {

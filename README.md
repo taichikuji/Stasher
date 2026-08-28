@@ -72,7 +72,7 @@ Other features are:
 * Stash exactly the tabs selected in Chromium's tab strip
 * Stash one web tab from its **Stash this tab** right-click action
 * Search saved groups by group title, tab title, or URL
-* Import Stasher JSON backups or `URL | title` text exports
+* Import Stasher JSON backups
 * Completely local and connectivity-agnostic.
 * Ability to recover a tab or groupped tab shortly after it has been deleted
 

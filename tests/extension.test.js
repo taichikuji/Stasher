@@ -701,5 +701,5 @@ test('manifest defines one browser-managed action shortcut and no options page',
 
   assert.equal(manifest.options_ui, undefined);
   assert.deepEqual(Object.keys(manifest.commands), ['_execute_action']);
-  assert.equal(manifest.commands._execute_action.suggested_key, 'Alt+Shift+S');
+  assert.equal(manifest.commands._execute_action.suggested_key, 'Alt+S');
 });

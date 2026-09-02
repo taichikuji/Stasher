@@ -69,7 +69,6 @@ function runBackground(options = {}) {
         if (query.highlighted) return clone(options.highlightedTabs ?? []);
         if (query.groupId === 7) return clone(options.groupedTabs ?? []);
         if (query.groupId === -1) return clone(options.looseTabs ?? []);
-        if (query.active) return clone(options.activeTabs ?? []);
         if (query.windowId !== undefined) return clone(options.windowTabs ?? []);
         return [];
       },
@@ -130,17 +129,12 @@ function createElement(initialClasses = []) {
       handlers.push(listener);
       listeners.set(type, handlers);
     },
-    removeEventListener(type, listener) {
-      listeners.set(type, (listeners.get(type) ?? []).filter(handler => handler !== listener));
-    },
     async trigger(type) {
       await Promise.all((listeners.get(type) ?? []).map(listener => listener({ type, target: this })));
     },
     setAttribute() {},
     focus() {},
-    select() {},
     showModal() {},
-    querySelectorAll: () => [],
     closest: () => null,
     style: {},
     classList: {
@@ -211,7 +205,6 @@ function runManager(initialItems, options = {}) {
   };
 
   const document = {
-    activeElement: null,
     addEventListener(name, listener) {
       documentListeners[name] = listener;
     },
@@ -223,7 +216,6 @@ function runManager(initialItems, options = {}) {
       return elements.get(id);
     },
     createElement,
-    createDocumentFragment: createElement,
     querySelector: () => null
   };
 

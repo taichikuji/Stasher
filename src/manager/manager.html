@@ -9,6 +9,10 @@
 </head>
 <body>
 
+  <!-- Keyboard users can skip the header controls and start at the stashes. -->
+  <a class="skip-link visually-hidden" href="#stash-container">Skip to stashes</a>
+
+  <!-- Shared SVG symbols keep icon-only controls accessible without inline scripts. -->
   <svg class="icon-sprite" aria-hidden="true">
     <symbol id="icon-help" viewBox="2 2 20 20">
       <path d="M9.1 9a3 3 0 1 1 4.9 2.3c-1.2.9-2 1.4-2 2.7M12 17h.01M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18Z" />
@@ -64,23 +68,23 @@
     </div>
   </header>
 
-  <main id="stash-container" aria-live="polite">
+  <main id="stash-container" tabindex="-1">
   </main>
 
-  <div id="undo-toast" class="undo-toast hidden" role="alert">
+  <div id="undo-toast" class="undo-toast hidden" role="status" aria-atomic="true">
     <span id="undo-msg">Item deleted</span>
-    <button id="undo-btn">UNDO</button>
-    <button id="close-toast" class="icon-btn" aria-label="Dismiss notification">✕</button>
+    <button id="undo-btn" type="button">UNDO</button>
+    <button id="close-toast" class="icon-btn" type="button" aria-label="Dismiss notification">✕</button>
   </div>
 
-  <div id="info-toast" class="undo-toast hidden" role="status">
+  <div id="info-toast" class="undo-toast hidden" role="status" aria-atomic="true">
     <span id="info-msg"></span>
-    <button id="close-info-toast" class="icon-btn" aria-label="Dismiss notification">✕</button>
+    <button id="close-info-toast" class="icon-btn" type="button" aria-label="Dismiss notification">✕</button>
   </div>
 
   <dialog id="confirm-modal" class="modal-overlay" aria-labelledby="confirm-title">
     <div class="modal-box">
-      <p id="confirm-title"></p>
+      <h2 id="confirm-title"></h2>
       <form method="dialog" class="modal-actions">
         <button value="cancel">Cancel</button>
         <button value="confirm" class="danger"><svg class="button-icon" aria-hidden="true"><use href="#icon-delete-stash"></use></svg>Delete All Stashes</button>

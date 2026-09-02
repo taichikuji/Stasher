@@ -20,3 +20,4 @@ dist/
 
 # Codex skills
 .agents/
+skills-lock.json

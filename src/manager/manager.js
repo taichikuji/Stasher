@@ -1,3 +1,6 @@
+// Manager-page controller. Storage is the source of truth; this page redraws from
+// it after every mutation so other extension contexts stay in sync.
+
 // Constants and Configuration
 const CONFIG = {
   STORAGE_KEY: 'stashedItems',
@@ -25,6 +28,7 @@ const getStashItems = async () => {
   return Array.isArray(result[CONFIG.STORAGE_KEY]) ? result[CONFIG.STORAGE_KEY] : [];
 };
 
+// The same lock used by the service worker prevents concurrent read-modify-write updates.
 const updateStashItems = (updater) => navigator.locks.request('stasher-storage', async () => {
   const items = await getStashItems();
   const updated = await updater(items);
@@ -84,6 +88,8 @@ setupEventListeners();
 
 async function loadStashes() {
   try {
+    // Rebuild instead of patching individual cards so storage changes from any
+    // extension context produce one consistent view.
     const items = await getStashItems();
     elements.container.innerHTML = '';
 
@@ -135,7 +141,7 @@ function stashMatchesQuery(item, query) {
  * Creates the DOM element for a stash card.
  */
 function createStashCard(item) {
-  const card = document.createElement('div');
+  const card = document.createElement('article');
   card.className = 'stash-card';
   if (isCollapsed(item.id)) card.classList.add('collapsed');
 
@@ -160,6 +166,7 @@ function createStashCard(item) {
   return card;
 }
 
+// Collapse state is intentionally session-only; stashes always reopen after a browser restart.
 const COLLAPSED_KEY_PREFIX = 'stash-collapsed:';
 
 function isCollapsed(stashId) {
@@ -191,6 +198,7 @@ function createTabListItem(tab, stashId, tabIndex) {
   a.rel = 'noopener noreferrer';
 
   const removeBtn = document.createElement('button');
+  removeBtn.type = 'button';
   removeBtn.className = 'icon-btn remove-tab-btn';
   removeBtn.innerHTML = iconMarkup('delete');
   removeBtn.setAttribute('aria-label', `Remove ${tab.title || url} from stash`);
@@ -258,6 +266,7 @@ function renderViewMode(container, item) {
 
   // Collapse / Expand toggle
   const collapseBtn = document.createElement('button');
+  collapseBtn.type = 'button';
   collapseBtn.className = 'icon-btn collapse-btn';
   const initiallyCollapsed = isCollapsed(item.id);
   collapseBtn.innerHTML = iconMarkup('down');
@@ -273,14 +282,13 @@ function renderViewMode(container, item) {
   };
 
   // 1. Badge
-  const badge = document.createElement('span');
+  const badge = document.createElement('h2');
   badge.className = `group-badge color-${safeColor(item.color)}`;
   badge.textContent = item.title || (item.type === 'group' ? 'Untitled Group' : 'Ungrouped Tabs');
-  badge.style.cursor = 'pointer';
-  badge.addEventListener('dblclick', () => restoreGroup(item));
 
   // 2. Edit Pencil Button
   const editBtn = document.createElement('button');
+  editBtn.type = 'button';
   editBtn.className = 'icon-btn edit-btn';
   editBtn.innerHTML = iconMarkup('edit');
   editBtn.title = 'Edit Title & Color';
@@ -291,13 +299,13 @@ function renderViewMode(container, item) {
   const meta = document.createElement('span');
   meta.className = 'meta-info';
   meta.textContent = `${tabs.length} tabs \u2022 ${formatTimestamp(item.timestamp)}`;
-  meta.style.marginLeft = "auto";
 
   // 4. Action Buttons
   const actions = document.createElement('div');
   actions.className = 'card-actions';
 
   const btnRestore = document.createElement('button');
+  btnRestore.type = 'button';
   btnRestore.className = 'primary icon-only';
   btnRestore.innerHTML = iconMarkup('restore');
   btnRestore.title = 'Restore all tabs';
@@ -309,6 +317,7 @@ function renderViewMode(container, item) {
   };
 
   const btnDelete = document.createElement('button');
+  btnDelete.type = 'button';
   btnDelete.className = 'danger icon-only';
   btnDelete.innerHTML = iconMarkup('delete-stash');
   btnDelete.title = 'Delete stash';
@@ -339,28 +348,25 @@ function renderEditMode(container, item) {
   input.setAttribute('aria-label', 'Stash title');
 
   // 2. Color Picker (Row of dots)
-  const colorPicker = document.createElement('div');
+  const colorPicker = document.createElement('fieldset');
   colorPicker.className = 'color-picker';
-  colorPicker.setAttribute('role', 'radiogroup');
-  colorPicker.setAttribute('aria-label', 'Group color');
+  const colorLegend = document.createElement('legend');
+  colorLegend.className = 'visually-hidden';
+  colorLegend.textContent = 'Stash color';
+  colorPicker.appendChild(colorLegend);
   let selectedColor = itemColor;
 
   CONFIG.CHROME_COLORS.forEach(color => {
-    const dot = document.createElement('button');
-    dot.className = `color-dot color-${color} ${color === itemColor ? 'selected' : ''}`;
-    dot.setAttribute('role', 'radio');
-    dot.setAttribute('aria-checked', color === itemColor ? 'true' : 'false');
+    const dot = document.createElement('input');
+    dot.type = 'radio';
+    dot.name = `stash-color-${item.id}`;
+    dot.value = color;
+    dot.checked = color === itemColor;
+    dot.className = `color-dot color-${color}`;
     dot.setAttribute('aria-label', color);
-    dot.onclick = () => {
-      // Handle selection visual
-      colorPicker.querySelectorAll('.color-dot').forEach(d => {
-        d.classList.remove('selected');
-        d.setAttribute('aria-checked', 'false');
-      });
-      dot.classList.add('selected');
-      dot.setAttribute('aria-checked', 'true');
+    dot.addEventListener('change', () => {
       selectedColor = color;
-    };
+    });
     colorPicker.appendChild(dot);
   });
 
@@ -388,6 +394,7 @@ function renderEditMode(container, item) {
 
   // 3. Save Button
   const saveBtn = document.createElement('button');
+  saveBtn.type = 'button';
   saveBtn.className = 'icon-btn icon-only save-btn';
   saveBtn.innerHTML = iconMarkup('check');
   saveBtn.setAttribute('aria-label', 'Save changes');
@@ -395,6 +402,7 @@ function renderEditMode(container, item) {
 
   // 4. Cancel Button
   const cancelBtn = document.createElement('button');
+  cancelBtn.type = 'button';
   cancelBtn.className = 'icon-btn icon-only cancel-btn';
   cancelBtn.innerHTML = iconMarkup('delete');
   cancelBtn.setAttribute('aria-label', 'Cancel editing');
@@ -420,6 +428,7 @@ async function updateStashData(id, newTitle, newColor) {
 }
 
 async function restoreGroup(item) {
+  // Avoid creating duplicate tabs when the restore control is activated twice.
   if (!item?.id || state.restoringIds.has(item.id)) return;
   state.restoringIds.add(item.id);
   const tabIds = [];
@@ -686,6 +695,7 @@ async function handleDeleteAll() {
 }
 
 function setupEventListeners() {
+  // Keep one-time page-level wiring separate from per-card listeners created during rendering.
   // Toast Listeners
   elements.undoBtn.onclick = handleUndo;
   elements.closeToastBtn.onclick = hideUndoToast;

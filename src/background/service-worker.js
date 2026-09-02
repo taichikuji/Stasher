@@ -1,3 +1,6 @@
+// Background owner of privileged tab, group, storage, badge, and context-menu work.
+// It persists all user data because Manifest V3 service workers can stop at any time.
+
 // Constants and Configuration
 const CONFIG = {
   MANAGER_PATH: 'src/manager/manager.html',
@@ -56,6 +59,7 @@ const openManager = async (windowId) => {
  * Saves a stash item to local storage.
  * @param {Object} dataItem - The stash item to save.
  */
+// The shared lock serializes stashes that arrive from separate browser events.
 const saveToStorage = (dataItem) => navigator.locks.request('stasher-storage', async () => {
   const result = await chrome.storage.local.get({ [CONFIG.STORAGE_KEY]: [] });
   const items = Array.isArray(result[CONFIG.STORAGE_KEY]) ? result[CONFIG.STORAGE_KEY] : [];
@@ -70,6 +74,7 @@ const saveToStorage = (dataItem) => navigator.locks.request('stasher-storage', a
  */
 const processStash = async (stashData, tabsToRemove, windowId) => {
   try {
+    // Persist before closing any tabs so a storage failure cannot lose them.
     if (stashData) {
       await saveToStorage(stashData);
     }
@@ -93,6 +98,7 @@ chrome.storage.onChanged.addListener((changes, namespace) => {
   }
 });
 chrome.runtime.onInstalled.addListener(() => {
+  // Context-menu registration belongs to installation/update, not worker startup.
   updateBadge();
   chrome.contextMenus.create({
     id: CONFIG.TAB_MENU_ID,
@@ -209,6 +215,7 @@ chrome.action.onClicked.addListener(handleStash);
 
 chrome.contextMenus.onClicked.addListener(async (info, tab) => {
   if (info.menuItemId === CONFIG.TAB_MENU_ID && tab) {
+    // A tab-strip click stashes exactly the chosen tab, including a pinned tab.
     await handleStash(tab, true);
   }
 });

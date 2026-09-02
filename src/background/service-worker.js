@@ -33,7 +33,6 @@ const updateBadge = async () => {
 /**
  * Opens or focuses the Stasher manager tab.
  * @param {number} windowId - The ID of the window to open the manager in.
- * @returns {Promise<object>} The manager tab.
  */
 const openManager = async (windowId) => {
   // Check if manager is already open in this window
@@ -43,16 +42,15 @@ const openManager = async (windowId) => {
   if (managerTab) {
     // If found, highlight it and ensure it's pinned
     await chrome.tabs.update(managerTab.id, { active: true, pinned: true });
-    return managerTab;
+  } else {
+    // If not found, create it pinned at index 0 (far left)
+    await chrome.tabs.create({
+      url: MANAGER_URL,
+      index: 0,
+      pinned: true,
+      active: true
+    });
   }
-
-  // If not found, create it pinned at index 0 (far left)
-  return chrome.tabs.create({
-    url: MANAGER_URL,
-    index: 0,
-    pinned: true,
-    active: true
-  });
 };
 
 /**
@@ -65,31 +63,6 @@ const saveToStorage = (dataItem) => navigator.locks.request('stasher-storage', a
   const items = Array.isArray(result[CONFIG.STORAGE_KEY]) ? result[CONFIG.STORAGE_KEY] : [];
   await chrome.storage.local.set({ [CONFIG.STORAGE_KEY]: [dataItem, ...items] });
 });
-
-/**
- * Processes the stashing operation: saves data, opens manager, and removes tabs.
- * @param {Object} stashData - The data to stash.
- * @param {object[]} tabsToRemove - The tabs to close after stashing.
- * @param {number} windowId - The ID of the window to open the manager in.
- */
-const processStash = async (stashData, tabsToRemove, windowId) => {
-  try {
-    // Persist before closing any tabs so a storage failure cannot lose them.
-    if (stashData) {
-      await saveToStorage(stashData);
-    }
-    
-    // Always open manager at the end
-    await openManager(windowId);
-    
-    // Only remove tabs if we successfully saved (if there was data)
-    if (tabsToRemove.length > 0 && stashData) {
-      await chrome.tabs.remove(tabsToRemove.map(t => t.id));
-    }
-  } catch (error) {
-    console.error("Error processing stash:", error);
-  }
-};
 
 // Keep the badge in sync when the manager changes storage (delete, undo, import, etc.)
 chrome.storage.onChanged.addListener((changes, namespace) => {
@@ -202,8 +175,12 @@ const handleStash = async (tab, singleTab = false) => {
       }
     }
 
-    // If stashData is null (no tabs found), processStash will just open the manager
-    await processStash(stashData, tabsToStash, currentWindowId);
+    if (stashData) {
+      // Persist before closing any tabs so a storage failure cannot lose them.
+      await saveToStorage(stashData);
+    }
+    await openManager(currentWindowId);
+    if (stashData) await chrome.tabs.remove(tabsToStash.map(t => t.id));
 
   } catch (error) {
     console.error("Critical error in handleStash:", error);

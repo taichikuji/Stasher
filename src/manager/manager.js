@@ -248,13 +248,8 @@ async function removeTabFromStash(stashId, tabIndex) {
  * Formats an ISO timestamp for display.
  */
 function formatTimestamp(timestamp) {
-  try {
-    const date = new Date(timestamp);
-    if (isNaN(date.getTime())) return timestamp;
-    return date.toLocaleString();
-  } catch {
-    return timestamp;
-  }
+  const date = new Date(timestamp);
+  return isNaN(date.getTime()) ? timestamp : date.toLocaleString();
 }
 
 /**
@@ -439,14 +434,11 @@ async function restoreGroup(item) {
     const tabs = Array.isArray(item.tabs) ? item.tabs.filter(t => isAllowedTabUrl(t.url)) : [];
     if (tabs.length === 0) return;
 
-    // 1. Create Tabs (in batches of 5 to avoid overwhelming the browser)
-    for (let i = 0; i < tabs.length; i += 5) {
-      const batch = tabs.slice(i, i + 5);
-      const created = await Promise.all(
-        batch.map(t => chrome.tabs.create({ url: t.url, active: false }))
-      );
-      tabIds.push(...created.map(t => t.id));
-    }
+    // 1. Create Tabs
+    const created = await Promise.all(
+      tabs.map(t => chrome.tabs.create({ url: t.url, active: false }))
+    );
+    tabIds.push(...created.map(t => t.id));
 
     if (item.type === 'group') {
       // 2. Create Group

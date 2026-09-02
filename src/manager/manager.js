@@ -285,6 +285,8 @@ function renderViewMode(container, item) {
   const badge = document.createElement('h2');
   badge.className = `group-badge color-${safeColor(item.color)}`;
   badge.textContent = item.title || (item.type === 'group' ? 'Untitled Group' : 'Ungrouped Tabs');
+  badge.style.cursor = 'pointer';
+  badge.addEventListener('dblclick', () => restoreGroup(item));
 
   // 2. Edit Pencil Button
   const editBtn = document.createElement('button');

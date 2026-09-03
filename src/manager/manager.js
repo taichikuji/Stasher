@@ -101,7 +101,7 @@ async function loadStashes() {
       return;
     }
 
-    const visibleItems = items.filter(item => stashMatchesQuery(item, elements.searchInput.value));
+    const visibleItems = rankStashesByQuery(items, elements.searchInput.value);
     if (visibleItems.length === 0) {
       const p = document.createElement('p');
       p.className = 'empty-state';
@@ -121,20 +121,22 @@ async function loadStashes() {
   }
 }
 
-function stashMatchesQuery(item, query) {
+function rankStashesByQuery(items, query) {
   const normalizedQuery = String(query || '').trim().toLocaleLowerCase();
-  if (!normalizedQuery) return true;
+  if (!normalizedQuery) return items;
 
-  const searchableValues = [
-    item?.title,
-    ...(Array.isArray(item?.tabs)
-      ? item.tabs.flatMap(tab => [tab?.title, tab?.url])
-      : [])
-  ];
+  const matches = value =>
+    typeof value === 'string' && value.toLocaleLowerCase().includes(normalizedQuery);
+  const ranked = [[], [], []];
 
-  return searchableValues.some(value =>
-    typeof value === 'string' && value.toLocaleLowerCase().includes(normalizedQuery)
-  );
+  for (const item of items) {
+    const tabs = Array.isArray(item?.tabs) ? item.tabs : [];
+    if (matches(item?.title)) ranked[0].push(item);
+    else if (tabs.some(tab => matches(tab?.title))) ranked[1].push(item);
+    else if (tabs.some(tab => matches(tab?.url))) ranked[2].push(item);
+  }
+
+  return ranked.flat();
 }
 
 /**
@@ -450,6 +452,12 @@ async function restoreGroup(item) {
         color: safeColor(item.color),
         collapsed: false
       });
+    } else {
+      for (let index = 0; index < tabs.length; index++) {
+        if (tabs[index].pinned === true) {
+          await chrome.tabs.update(created[index].id, { pinned: true });
+        }
+      }
     }
 
     // 4. Cleanup Storage. Await this so a successful restore cannot silently
@@ -611,6 +619,7 @@ function isValidStashItem(item) {
     tab && typeof tab === 'object' &&
     typeof tab.url === 'string' &&
     typeof tab.title === 'string' &&
+    (tab.pinned === undefined || typeof tab.pinned === 'boolean') &&
     isAllowedTabUrl(tab.url)
   );
 }

@@ -164,6 +164,7 @@ function runManager(initialItems, options = {}) {
   const createdTabs = [];
   const errors = [];
   const groupedTabs = [];
+  const updatedTabs = [];
   const updatedGroups = [];
   let items = clone(initialItems);
   let nextTabId = 20;
@@ -189,6 +190,12 @@ function runManager(initialItems, options = {}) {
         if (options.failTabCreation) throw new Error('Tab creation failed');
         const tab = { id: nextTabId++, ...clone(details) };
         createdTabs.push(tab);
+        return tab;
+      },
+      update: async (id, details) => {
+        if (options.failTabPinning) throw new Error('Tab pinning failed');
+        const tab = { id, ...clone(details) };
+        updatedTabs.push(tab);
         return tab;
       },
       group: async details => {
@@ -247,6 +254,7 @@ function runManager(initialItems, options = {}) {
     createdTabs,
     errors,
     groupedTabs,
+    updatedTabs,
     updatedGroups,
     getElement: id => elements.get(id),
     triggerDocumentEvent: (name, event) => documentListeners[name](event),
@@ -325,7 +333,8 @@ test('registers the tab menu and stashes exactly the right-clicked tab', async (
   assert.equal('color' in result.getItems()[0], false);
   assert.deepEqual(result.getItems()[0].tabs, [{
     title: 'Pinned page',
-    url: 'https://pinned.example'
+    url: 'https://pinned.example',
+    pinned: true
   }]);
   assert.deepEqual(result.removedTabs, [51]);
 });
@@ -505,6 +514,38 @@ test('restores a stash when its title is double-clicked', async () => {
   assert.deepEqual(result.getItems(), []);
 });
 
+test('restores pinned state while leaving legacy tabs unpinned', async () => {
+  const stash = {
+    id: 'restore-pinned',
+    type: 'loose',
+    tabs: [
+      { title: 'Pinned', url: 'https://pinned.example', pinned: true },
+      { title: 'Legacy', url: 'https://legacy.example' }
+    ]
+  };
+  const result = runManager([stash]);
+
+  await vm.runInContext(`restoreGroup(${JSON.stringify(stash)})`, result.context);
+
+  assert.deepEqual(result.updatedTabs, [{ id: 20, pinned: true }]);
+  assert.deepEqual(result.getItems(), []);
+});
+
+test('keeps a stash when restoring pinned state fails', async () => {
+  const stash = {
+    id: 'pin-fails',
+    type: 'loose',
+    tabs: [{ title: 'Pinned', url: 'https://pinned.example', pinned: true }]
+  };
+  const result = runManager([stash], { failTabPinning: true });
+
+  await vm.runInContext(`restoreGroup(${JSON.stringify(stash)})`, result.context);
+
+  assert.deepEqual(result.getItems(), [stash]);
+  assert.equal(result.errors.length, 1);
+  assert.match(result.getElement('info-msg').textContent, /kept to avoid data loss/i);
+});
+
 test('keeps a stash when restoration fails before cleanup', async () => {
   const stash = {
     id: 'keep-me',
@@ -557,18 +598,31 @@ test('reports cleanup failure and retains the restored stash', async () => {
   assert.match(result.getElement('info-msg').textContent, /kept to avoid data loss/i);
 });
 
-test('search matches stash titles, tab titles, and URLs', () => {
+test('search ranks stash titles, tab titles, and URLs while preserving tie order', () => {
   const result = runManager([]);
-  const stash = {
-    title: 'Research',
-    tabs: [{ title: 'Chromium docs', url: 'https://developer.chrome.com' }]
-  };
+  const stashes = [
+    { id: 'url-first', title: 'Archive', tabs: [{ title: 'One', url: 'https://needle.example' }] },
+    { id: 'tab-first', title: 'Archive', tabs: [{ title: 'Needle notes', url: 'https://two.example' }] },
+    { id: 'title-first', title: 'Needle research', tabs: [{ title: 'Three', url: 'https://three.example' }] },
+    { id: 'title-second', title: 'NEEDLE links', tabs: [{ title: 'Needle too', url: 'https://needle.example/too' }] },
+    { id: 'tab-second', title: 'Archive', tabs: [{ title: 'A needle later', url: 'https://five.example' }] },
+    { id: 'url-second', title: 'Archive', tabs: [{ title: 'Six', url: 'https://six.example/needle' }] },
+    { id: 'missing', title: 'Archive', tabs: [{ title: 'Seven', url: 'https://seven.example' }] }
+  ];
 
-  result.context.testStash = stash;
-  assert.equal(vm.runInContext("stashMatchesQuery(testStash, 'research')", result.context), true);
-  assert.equal(vm.runInContext("stashMatchesQuery(testStash, 'CHROMIUM')", result.context), true);
-  assert.equal(vm.runInContext("stashMatchesQuery(testStash, 'developer.chrome')", result.context), true);
-  assert.equal(vm.runInContext("stashMatchesQuery(testStash, 'missing')", result.context), false);
+  result.context.testStashes = stashes;
+  assert.deepEqual(
+    clone(vm.runInContext("rankStashesByQuery(testStashes, 'needle')", result.context)).map(item => item.id),
+    ['title-first', 'title-second', 'tab-first', 'tab-second', 'url-first', 'url-second']
+  );
+  assert.deepEqual(
+    clone(vm.runInContext("rankStashesByQuery(testStashes, '')", result.context)).map(item => item.id),
+    stashes.map(item => item.id)
+  );
+  assert.deepEqual(
+    clone(vm.runInContext("rankStashesByQuery(testStashes, 'absent')", result.context)),
+    []
+  );
 });
 
 test('Cmd+F and Ctrl+F focus the Stasher search input', () => {
@@ -625,7 +679,7 @@ test('imports compatible Stasher JSON while de-duplicating stash IDs', async () 
   const newItem = {
     id: 'new-id',
     title: 'New',
-    tabs: [{ title: 'New', url: 'https://new.example' }]
+    tabs: [{ title: 'New', url: 'https://new.example', pinned: true }]
   };
   const result = runManager([existing]);
   result.context.importEvent = {
@@ -641,6 +695,7 @@ test('imports compatible Stasher JSON while de-duplicating stash IDs', async () 
   assert.equal(result.getItems().filter(item => item.id === 'same-id').length, 1);
   assert.equal(result.getItems()[0].title, 'Imported replacement');
   assert.equal(result.getItems()[1].id, 'new-id');
+  assert.equal(result.getItems()[1].tabs[0].pinned, true);
 });
 
 test('rejects Stasher JSON over the item limit', async () => {

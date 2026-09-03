@@ -1,96 +1,100 @@
-# Stasher
-A small browser extension to manage tabs!
+<p align="center">
+  <img src="assets/icon_color.svg" alt="Stasher mascot" width="128">
+</p>
+
+<h1 align="center">Stasher</h1>
+
+<p align="center">
+  Yet Another Tab Manager by <a href="https://github.com/taichikuji">@taichikuji</a>
+</p>
+
+<p align="center">
+  A small, opinionated browser extension for putting tabs away and finding your way back to them.
+</p>
+
+Stasher is for the tabs you are not ready to close, but do not need in front of you
+right now. Save them locally, give a stash a memorable name, and restore it when
+you are ready.
+
+It is intentionally modest. Stasher is not trying to be an always-open tab
+workspace, a cloud service, or a dashboard full of things to configure. It is a
+quiet place to put tabs away.
+
+## What it does
+
+- Stash a focused tab group from the extension button.
+- Stash the selected tabs from Chromium's tab strip.
+- Stash one web tab from its **Stash this tab** context-menu action.
+- Keep grouped and loose tabs together in the manager.
+- Rename a stash and change its tab-group color after saving it.
+- Search stash titles, tab titles, and URLs.
+- Restore a whole stash or open individual tabs from it.
+- Import and export Stasher JSON backups.
+- Work completely locally, without an account or network connection.
+- Use light or dark mode.
+
+Pinned tabs that are explicitly stashed are pinned again when restored. Ordinary
+unstashed pinned tabs are left alone when Stasher saves loose tabs, so the tab
+strip keeps its usual shape.
+
+## What it does not do
+
+- It is not an always-on sidebar or a live replacement for the browser's tab strip.
+- It does not search from the address bar; the manager is the home for saved stashes.
+- It does not require an account, cloud sync, or a network connection.
+- It does not continuously track, auto-close, or reorganize tabs in the background.
+- It does not ask you to maintain a complicated system of folders, tags, stars, or notes.
+
+Those boundaries are intentional. Stasher helps you put tabs away and bring them
+back; it does not try to manage every moment of your browsing.
 
 ## Installation
 
 Stasher supports Chromium-based desktop browsers, including Google Chrome,
 Brave, Microsoft Edge, Opera, Vivaldi, and compatible Chromium forks.
 
-Open your browser's extensions page (for example, `chrome://extensions`,
-`brave://extensions`, or `edge://extensions`), enable developer mode, choose
-**Load unpacked**, and select this directory.
+1. Open your browser's extensions page (`chrome://extensions`,
+   `brave://extensions`, or `edge://extensions`).
+2. Enable **Developer mode**.
+3. Choose **Load unpacked** and select this directory.
+4. Open the extensions menu and pin Stasher to the toolbar.
 
-Open the browser's extensions menu to pin Stasher to the toolbar.
+## A small note about Firefox
 
-## Why is there no Firefox build?
+Stasher was created for Chromium-based browsers and has not been fully tested
+on Firefox. Firefox support has also not been requested, so maintaining a build
+that cannot be confidently validated is outside the project's current scope.
 
-Stasher was created for Chromium-based browsers and has never been fully tested
-on Firefox. It has also not been actively used there, nor has Firefox support
-been requested. Maintaining a build that cannot be confidently validated is
-therefore outside Stasher's scope.
+## Development
 
-## Tag versioning workflow
-
-For the workflow on how to generate and push new releases with tags, read [GUIDE.md](.github/workflows/GUIDE.md)
-
-## Testing
-
-Run the zero-dependency test suite with Node.js 20 or newer:
+The project has no runtime dependencies. Run the test suite with Node.js 20 or
+newer:
 
 ```bash
 node --test
 ```
 
-The tests execute Stasher's background and manager scripts against Chromium's
-standard `chrome.*` extension API namespace; despite its name, that namespace
-is shared by compatible Chromium-based browsers. Before releasing, test Chrome
-and at least one other Chromium-based browser such as Brave or Edge. Verify
-toolbar, keyboard, and tab-context-menu stashing; badge updates; grouped and
-loose-tab restoration; title and color preservation; import and export; and
-behavior after restarting each browser.
+Before releasing, test the extension in Chrome and at least one other Chromium
+browser such as Brave or Edge. The release workflow is documented in
+[GUIDE.md](.github/workflows/GUIDE.md).
 
-## Description
+## Contributing
 
-Stasher is, by design, opinionated. This means that certain configurations are assumed, while others may change depending on feedback. The purpose of this extension is not to be a fit-all extension, but rather an extension that does the things it does the best way it can, while keeping things minimal, and simple to understand.
+Stasher is opinionated, but not closed to sensible improvements. If something
+feels useful and keeps the project healthy, open an issue or pull request and
+explain the problem it solves.
 
-> Note: Nonetheless, if sensible changes are suggested, I will discuss and implement them if deemed sensible and checks out with the project's healthiness. Already performed this a few times during the lifespan of Stasher!
+## Support
 
-At this time ( I will update this as it goes ) it does the following:
+Stasher is not currently published in the Chrome Web Store. If you would like
+to help with that someday, you can [buy me a coffee via PayPal](https://paypal.me/ivanperezf).
 
-### Functionality
+## Icon palette
 
-#### Groupped tabs stashing
+- Red: [#ef5b5b](https://www.color-hex.com/color/ef5b5b)
+- Purple: [#855bef](https://www.color-hex.com/color/855bef)
+- Yellow: [#efde5b](https://www.color-hex.com/color/efde5b)
+- Pink: [#ffa8a8](https://www.color-hex.com/color/ffa8a8)
 
-Stash tabs via clicking the extension icon. If it finds a tab group being focused at the time of clicking, it will save only the tabs within that tab group.
-
-Then it will remove the tabs and tab group from visibility and move it to internal storage. From there, you can decide to recover it or leave it as-is.
-
-#### Non groupped tab stashing
-
-If you click on a non-group-tab, it will save ALL of the non-groupped-tabs with exceptions. The exceptions are:
-
-* new tab ( empty )
-* The manager.html from the extension itself
-* Any pinned tabs
-
-Then same thing, it will redirect to the manager, which allows you to recover, delete, or open individual links as needed.
-
-Other features are:
-
-* Dark/Light mode
-* Ability to edit the tab groups title and color after it has been stashed
-* Stash exactly the tabs selected in Chromium's tab strip
-* Stash one web tab from its **Stash this tab** right-click action
-* Search saved groups by group title, tab title, or URL
-* Import Stasher JSON backups
-* Completely local and connectivity-agnostic.
-* Ability to recover a tab or groupped tab shortly after it has been deleted
-
-That's it for now. As you can see it is minimal, but it is like this by design. Will continue to improve as time passes by.
-
-## Is there a Google Extension Store URL available?
-
-Not at this time. Thinking about having to pay 5$ just to upload it hurts my soul a little bit. If someone donates that amount I will ensure to upload it in due time. Teehee.
-
-If you want to help me with this, I'd really appreciate it, just go ahead and drop a coffee here: [paypal.me](https://paypal.me/ivanperezf). It helps a ton!
-
-## What is the color palette of the project's icon?
-
-* Red : [#ef5b5b](https://www.color-hex.com/color/ef5b5b)
-* Purple: [#855bef](https://www.color-hex.com/color/855bef)
-* Yellow: [#efde5b](https://www.color-hex.com/color/efde5b)
-* Pink: [#ffa8a8](https://www.color-hex.com/color/ffa8a8)
-
----
-
-Anyways that's it for real now. Thanks as always. If you find bugs or errors report them accordingly.
+Found a bug or have an idea? Please report it with enough context to reproduce
+the behavior. Thanks for taking the time to use Stasher.

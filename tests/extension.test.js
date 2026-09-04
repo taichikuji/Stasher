@@ -29,15 +29,13 @@ function runBackground(options = {}) {
   const createdTabs = [];
   const updatedTabs = [];
   const removedTabs = [];
-  const badges = [];
   const contextMenus = [];
   let items = clone(options.items ?? []);
 
   const api = {
     runtime: {
       getURL: path => `chrome-extension://stasher/${path}`,
-      onInstalled: eventSlot(listeners, 'installed'),
-      onStartup: eventSlot(listeners, 'startup')
+      onInstalled: eventSlot(listeners, 'installed')
     },
     storage: {
       local: {
@@ -45,12 +43,9 @@ function runBackground(options = {}) {
         set: async value => {
           items = clone(value.stashedItems);
         }
-      },
-      onChanged: eventSlot(listeners, 'storageChanged')
+      }
     },
     action: {
-      setBadgeText: async details => badges.push(['text', clone(details)]),
-      setBadgeBackgroundColor: async details => badges.push(['color', clone(details)]),
       onClicked: eventSlot(listeners, 'actionClicked')
     },
     contextMenus: {
@@ -106,7 +101,6 @@ function runBackground(options = {}) {
     createdTabs,
     updatedTabs,
     removedTabs,
-    badges,
     contextMenus,
     getItems: () => clone(items)
   };
@@ -296,15 +290,6 @@ test('stashes a tab group through the Chromium extension API', async () => {
     pinned: true,
     active: true
   }]);
-});
-
-test('updates the badge when stash storage changes', async () => {
-  const result = runBackground({ items: [{ id: 'saved-stash' }] });
-
-  result.listeners.storageChanged({ stashedItems: {} }, 'local');
-  await new Promise(resolve => setImmediate(resolve));
-
-  assert.deepEqual(result.badges.at(-2), ['text', { text: '1' }]);
 });
 
 test('renders a browser-cached favicon with a letter fallback', () => {

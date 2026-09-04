@@ -331,12 +331,15 @@ button.danger:hover { background-color: color-mix(in srgb, var(--red) 12%, trans
 .link-item:last-child { border-bottom: none; }
 
 .link-icon {
-  display: grid;
   width: 20px;
   height: 20px;
   flex: 0 0 auto;
-  place-items: center;
   margin-right: 10px;
+}
+
+.link-icon-fallback {
+  display: grid;
+  place-items: center;
   border-radius: 5px;
   background: var(--mantle);
   color: var(--blue);
@@ -344,16 +347,11 @@ button.danger:hover { background-color: color-mix(in srgb, var(--red) 12%, trans
   font-weight: 700;
 }
 
-.link-icon-fallback,
 .link-favicon {
-  grid-area: 1 / 1;
-}
-
-.link-favicon {
+  display: block;
   width: 100%;
   height: 100%;
   object-fit: contain;
-  border-radius: inherit;
 }
 
 .link-item a {

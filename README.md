@@ -33,9 +33,8 @@ quiet place to put tabs away.
 - Work completely locally, without an account or network connection.
 - Use light or dark mode.
 
-Pinned tabs that are explicitly stashed are pinned again when restored. Ordinary
-unstashed pinned tabs are left alone when Stasher saves loose tabs, so the tab
-strip keeps its usual shape.
+When Stasher saves loose tabs, it leaves pinned tabs in place so the tab strip
+keeps its usual shape.
 
 ## What it does not do
 

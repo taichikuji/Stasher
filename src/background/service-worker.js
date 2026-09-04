@@ -166,8 +166,7 @@ const handleStash = async (tab, singleTab = false) => {
         type: tabGroup ? 'group' : 'loose',
         tabs: tabsToStash.map(t => ({
           title: t.title || t.url,
-          url: t.url,
-          ...(t.pinned ? { pinned: true } : {})
+          url: t.url
         }))
       };
       if (tabGroup) {

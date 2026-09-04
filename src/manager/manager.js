@@ -317,7 +317,7 @@ function renderViewMode(container, item) {
   btnRestore.type = 'button';
   btnRestore.className = 'primary icon-only';
   btnRestore.innerHTML = iconMarkup('restore');
-  btnRestore.title = 'Restore ALL';
+  btnRestore.title = 'Restore Group';
   btnRestore.setAttribute('aria-label', `Restore all tabs from ${item.title || 'stash'}`);
   btnRestore.onclick = async () => {
     btnRestore.disabled = true;

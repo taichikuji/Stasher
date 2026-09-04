@@ -124,6 +124,9 @@ function createElement(initialClasses = []) {
       this.children.push(child);
       return child;
     },
+    replaceChildren(...children) {
+      this.children = children;
+    },
     addEventListener(type, listener) {
       const handlers = listeners.get(type) ?? [];
       handlers.push(listener);
@@ -311,17 +314,18 @@ test('renders a browser-cached favicon with a letter fallback', () => {
     result.context
   );
   const [icon] = linkItem.children;
-  const [fallback, favicon] = icon.children;
+  const [favicon] = icon.children;
 
-  assert.equal(fallback.textContent, 'E');
+  assert.equal(icon.classList.contains('link-icon-fallback'), false);
   assert.equal(
     favicon.src,
     'chrome-extension://stasher/_favicon/?pageUrl=https%3A%2F%2Fexample.com%2Fdocs&size=32'
   );
 
   favicon.onerror();
-  assert.equal(favicon.hidden, true);
-  assert.equal(fallback.textContent, 'E');
+  assert.equal(icon.children.length, 0);
+  assert.equal(icon.classList.contains('link-icon-fallback'), true);
+  assert.equal(icon.textContent, 'E');
 });
 
 test('registers the tab menu and stashes exactly the right-clicked tab', async () => {

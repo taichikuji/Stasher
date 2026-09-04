@@ -1,4 +1,4 @@
-// Background owner of privileged tab, group, storage, badge, and context-menu work.
+// Background owner of privileged tab, group, storage, and context-menu work.
 // It persists all user data because Manifest V3 service workers can stop at any time.
 
 // Constants and Configuration
@@ -14,21 +14,6 @@ const CONFIG = {
 };
 
 const MANAGER_URL = chrome.runtime.getURL(CONFIG.MANAGER_PATH);
-
-/**
- * Updates the toolbar badge to show the current stash count.
- */
-const updateBadge = async () => {
-  try {
-    const result = await chrome.storage.local.get({ [CONFIG.STORAGE_KEY]: [] });
-    const items = Array.isArray(result[CONFIG.STORAGE_KEY]) ? result[CONFIG.STORAGE_KEY] : [];
-    const count = items.length;
-    await chrome.action.setBadgeText({ text: count > 0 ? String(count) : '' });
-    await chrome.action.setBadgeBackgroundColor({ color: '#1e66f5' });
-  } catch (error) {
-    console.error("Error updating badge:", error);
-  }
-};
 
 /**
  * Opens or focuses the Stasher manager tab.
@@ -64,15 +49,8 @@ const saveToStorage = (dataItem) => navigator.locks.request('stasher-storage', a
   await chrome.storage.local.set({ [CONFIG.STORAGE_KEY]: [dataItem, ...items] });
 });
 
-// Keep the badge in sync when the manager changes storage (delete, undo, import, etc.)
-chrome.storage.onChanged.addListener((changes, namespace) => {
-  if (namespace === 'local' && changes[CONFIG.STORAGE_KEY]) {
-    updateBadge();
-  }
-});
 chrome.runtime.onInstalled.addListener(() => {
   // Context-menu registration belongs to installation/update, not worker startup.
-  updateBadge();
   chrome.contextMenus.create({
     id: CONFIG.TAB_MENU_ID,
     title: 'Stash this tab',
@@ -80,7 +58,6 @@ chrome.runtime.onInstalled.addListener(() => {
     documentUrlPatterns: ['http://*/*', 'https://*/*']
   });
 });
-chrome.runtime.onStartup.addListener(updateBadge);
 
 /**
  * Helper to filter valid tabs for stashing.

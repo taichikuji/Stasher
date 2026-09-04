@@ -40,9 +40,9 @@ Do not use `Bump version ...` without a commit type.
    ```
 
 4. Load the unpacked extension in Chrome and at least one other Chromium-based
-   browser such as Brave or Edge. Check toolbar and keyboard stashing, badge
-   updates, grouped and loose-tab restoration, import/export, and behavior
-   after restarting the browser.
+   browser such as Brave or Edge. Check toolbar and keyboard stashing, grouped
+   and loose-tab restoration, import/export, and behavior after restarting the
+   browser.
 
 5. Commit any pending product changes with a correctly formatted commit message.
 

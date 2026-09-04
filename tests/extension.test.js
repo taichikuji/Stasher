@@ -172,6 +172,9 @@ function runManager(initialItems, options = {}) {
   const elements = new Map();
 
   const api = {
+    runtime: {
+      getURL: path => `chrome-extension://stasher/${path}`
+    },
     storage: {
       local: {
         get: async () => ({ stashedItems: clone(items) }),
@@ -289,6 +292,7 @@ test('stashes a tab group through the Chromium extension API', async () => {
       { title: 'Two', url: 'https://two.example' }
     ]
   }]);
+  assert.equal(Object.hasOwn(result.getItems()[0].tabs[0], 'favIconUrl'), false);
   assert.deepEqual(result.removedTabs, [11, 12]);
   assert.deepEqual(result.createdTabs, [{
     id: 100,
@@ -306,6 +310,26 @@ test('updates the badge when stash storage changes', async () => {
   await new Promise(resolve => setImmediate(resolve));
 
   assert.deepEqual(result.badges.at(-2), ['text', { text: '1' }]);
+});
+
+test('renders a browser-cached favicon with a letter fallback', () => {
+  const result = runManager([]);
+  const linkItem = vm.runInContext(
+    "createTabListItem({ title: 'Example', url: 'https://example.com/docs' }, 'stash', 0)",
+    result.context
+  );
+  const [icon] = linkItem.children;
+  const [fallback, favicon] = icon.children;
+
+  assert.equal(fallback.textContent, 'E');
+  assert.equal(
+    favicon.src,
+    'chrome-extension://stasher/_favicon/?pageUrl=https%3A%2F%2Fexample.com%2Fdocs&size=32'
+  );
+
+  favicon.onerror();
+  assert.equal(favicon.hidden, true);
+  assert.equal(fallback.textContent, 'E');
 });
 
 test('registers the tab menu and stashes exactly the right-clicked tab', async () => {
@@ -774,6 +798,7 @@ test('manifest defines a Chromium MV3 service worker', () => {
     manifest.background.service_worker,
     'src/background/service-worker.js'
   );
+  assert.equal(manifest.permissions.includes('favicon'), true);
   assert.equal(manifest.permissions.includes('contextMenus'), true);
   assert.match(managerHtml, /<main id="stash-container" tabindex="-1" aria-live="polite">/);
 });

@@ -8,6 +8,7 @@
     "tabs",
     "tabGroups",
     "storage",
+    "favicon",
     "contextMenus"
   ],
   "content_security_policy": {

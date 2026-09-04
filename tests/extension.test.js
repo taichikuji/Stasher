@@ -164,7 +164,6 @@ function runManager(initialItems, options = {}) {
   const createdTabs = [];
   const errors = [];
   const groupedTabs = [];
-  const updatedTabs = [];
   const updatedGroups = [];
   let items = clone(initialItems);
   let nextTabId = 20;
@@ -193,12 +192,6 @@ function runManager(initialItems, options = {}) {
         if (options.failTabCreation) throw new Error('Tab creation failed');
         const tab = { id: nextTabId++, ...clone(details) };
         createdTabs.push(tab);
-        return tab;
-      },
-      update: async (id, details) => {
-        if (options.failTabPinning) throw new Error('Tab pinning failed');
-        const tab = { id, ...clone(details) };
-        updatedTabs.push(tab);
         return tab;
       },
       group: async details => {
@@ -257,7 +250,6 @@ function runManager(initialItems, options = {}) {
     createdTabs,
     errors,
     groupedTabs,
-    updatedTabs,
     updatedGroups,
     getElement: id => elements.get(id),
     triggerDocumentEvent: (name, event) => documentListeners[name](event),
@@ -357,8 +349,7 @@ test('registers the tab menu and stashes exactly the right-clicked tab', async (
   assert.equal('color' in result.getItems()[0], false);
   assert.deepEqual(result.getItems()[0].tabs, [{
     title: 'Pinned page',
-    url: 'https://pinned.example',
-    pinned: true
+    url: 'https://pinned.example'
   }]);
   assert.deepEqual(result.removedTabs, [51]);
 });
@@ -538,7 +529,7 @@ test('restores a stash when its title is double-clicked', async () => {
   assert.deepEqual(result.getItems(), []);
 });
 
-test('restores pinned state while leaving legacy tabs unpinned', async () => {
+test('restores legacy pinned metadata as ordinary tabs', async () => {
   const stash = {
     id: 'restore-pinned',
     type: 'loose',
@@ -551,23 +542,11 @@ test('restores pinned state while leaving legacy tabs unpinned', async () => {
 
   await vm.runInContext(`restoreGroup(${JSON.stringify(stash)})`, result.context);
 
-  assert.deepEqual(result.updatedTabs, [{ id: 20, pinned: true }]);
+  assert.deepEqual(result.createdTabs.map(({ id, ...tab }) => tab), [
+    { url: 'https://pinned.example', active: false },
+    { url: 'https://legacy.example', active: false }
+  ]);
   assert.deepEqual(result.getItems(), []);
-});
-
-test('keeps a stash when restoring pinned state fails', async () => {
-  const stash = {
-    id: 'pin-fails',
-    type: 'loose',
-    tabs: [{ title: 'Pinned', url: 'https://pinned.example', pinned: true }]
-  };
-  const result = runManager([stash], { failTabPinning: true });
-
-  await vm.runInContext(`restoreGroup(${JSON.stringify(stash)})`, result.context);
-
-  assert.deepEqual(result.getItems(), [stash]);
-  assert.equal(result.errors.length, 1);
-  assert.match(result.getElement('info-msg').textContent, /kept to avoid data loss/i);
 });
 
 test('keeps a stash when restoration fails before cleanup', async () => {
@@ -703,7 +682,7 @@ test('imports compatible Stasher JSON while de-duplicating stash IDs', async () 
   const newItem = {
     id: 'new-id',
     title: 'New',
-    tabs: [{ title: 'New', url: 'https://new.example', pinned: true }]
+    tabs: [{ title: 'New', url: 'https://new.example' }]
   };
   const result = runManager([existing]);
   result.context.importEvent = {
@@ -719,7 +698,10 @@ test('imports compatible Stasher JSON while de-duplicating stash IDs', async () 
   assert.equal(result.getItems().filter(item => item.id === 'same-id').length, 1);
   assert.equal(result.getItems()[0].title, 'Imported replacement');
   assert.equal(result.getItems()[1].id, 'new-id');
-  assert.equal(result.getItems()[1].tabs[0].pinned, true);
+  assert.deepEqual(result.getItems()[1].tabs[0], {
+    title: 'New',
+    url: 'https://new.example'
+  });
 });
 
 test('rejects Stasher JSON over the item limit', async () => {

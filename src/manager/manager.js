@@ -464,12 +464,6 @@ async function restoreGroup(item) {
         color: safeColor(item.color),
         collapsed: false
       });
-    } else {
-      for (let index = 0; index < tabs.length; index++) {
-        if (tabs[index].pinned === true) {
-          await chrome.tabs.update(created[index].id, { pinned: true });
-        }
-      }
     }
 
     // 4. Cleanup Storage. Await this so a successful restore cannot silently
@@ -631,7 +625,6 @@ function isValidStashItem(item) {
     tab && typeof tab === 'object' &&
     typeof tab.url === 'string' &&
     typeof tab.title === 'string' &&
-    (tab.pinned === undefined || typeof tab.pinned === 'boolean') &&
     isAllowedTabUrl(tab.url)
   );
 }

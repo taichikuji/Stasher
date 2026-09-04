@@ -300,8 +300,8 @@ function renderViewMode(container, item) {
   editBtn.type = 'button';
   editBtn.className = 'icon-btn edit-btn';
   editBtn.innerHTML = iconMarkup('edit');
-  editBtn.title = 'Edit Title & Color';
-  editBtn.setAttribute('aria-label', 'Edit title and color');
+  editBtn.title = 'Edit entry';
+  editBtn.setAttribute('aria-label', 'Edit entry');
   editBtn.onclick = () => renderEditMode(container, item);
 
   // 3. Metadata
@@ -317,7 +317,7 @@ function renderViewMode(container, item) {
   btnRestore.type = 'button';
   btnRestore.className = 'primary icon-only';
   btnRestore.innerHTML = iconMarkup('restore');
-  btnRestore.title = 'Restore all tabs';
+  btnRestore.title = 'Restore ALL';
   btnRestore.setAttribute('aria-label', `Restore all tabs from ${item.title || 'stash'}`);
   btnRestore.onclick = async () => {
     btnRestore.disabled = true;
@@ -329,7 +329,7 @@ function renderViewMode(container, item) {
   btnDelete.type = 'button';
   btnDelete.className = 'danger icon-only';
   btnDelete.innerHTML = iconMarkup('delete-stash');
-  btnDelete.title = 'Delete stash';
+  btnDelete.title = 'Delete';
   btnDelete.setAttribute('aria-label', `Delete ${item.title || 'stash'}`);
   btnDelete.onclick = () => deleteStash(item.id);
 

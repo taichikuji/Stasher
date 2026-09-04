@@ -20,6 +20,12 @@ It is intentionally modest. Stasher is not trying to be an always-open tab
 workspace, a cloud service, or a dashboard full of things to configure. It is a
 quiet place to put tabs away.
 
+## Preview
+
+<p align="center">
+  <img src="assets/stasher-preview.webp" alt="Stasher mascot" width="720">
+</p>
+
 ## What it does
 
 - Stash a focused tab group from the extension button.

@@ -190,8 +190,20 @@ function createTabListItem(tab, stashId, tabIndex) {
 
   const icon = document.createElement('span');
   icon.className = 'link-icon';
-  icon.textContent = (tab.title?.trim() || url).charAt(0).toLocaleUpperCase();
   icon.setAttribute('aria-hidden', 'true');
+
+  const fallback = document.createElement('span');
+  fallback.className = 'link-icon-fallback';
+  fallback.textContent = (tab.title?.trim() || url).charAt(0).toLocaleUpperCase();
+
+  const favicon = document.createElement('img');
+  favicon.className = 'link-favicon';
+  favicon.alt = '';
+  favicon.src = chrome.runtime.getURL(`_favicon/?pageUrl=${encodeURIComponent(url)}&size=32`);
+  favicon.onerror = () => {
+    favicon.hidden = true;
+  };
+  icon.append(fallback, favicon);
 
   const a = document.createElement('a');
   a.href = url;

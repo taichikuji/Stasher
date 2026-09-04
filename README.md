@@ -23,7 +23,7 @@ quiet place to put tabs away.
 ## Preview
 
 <p align="center">
-  <img src="assets/stasher-preview.webp" alt="Stasher mascot" width="720">
+  <img src="assets/stasher-preview.webp" alt="Stasher preview" width="720">
 </p>
 
 ## What it does

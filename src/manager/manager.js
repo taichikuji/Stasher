@@ -329,7 +329,7 @@ function renderViewMode(container, item) {
   btnDelete.type = 'button';
   btnDelete.className = 'danger icon-only';
   btnDelete.innerHTML = iconMarkup('delete-stash');
-  btnDelete.title = 'Delete';
+  btnDelete.title = 'Delete Group';
   btnDelete.setAttribute('aria-label', `Delete ${item.title || 'stash'}`);
   btnDelete.onclick = () => deleteStash(item.id);
 

@@ -37,8 +37,8 @@
   --subtext0: light-dark(#666970, #a8abb2);
   --overlay0: light-dark(#96999e, #747881);
   --overlay2: light-dark(#777a80, #989ca5);
-  --surface1: light-dark(#c9cbce, #34363a);
-  --surface0: light-dark(#dddfe1, #25262a);
+  --surface1: light-dark(#c9cbce, #3d3f45);
+  --surface0: light-dark(#dddfe1, #2d2e33);
   --base: light-dark(#f4f4f3, #1a1b1e);
   --mantle: light-dark(#e9e9e7, #141518);
   --surface: light-dark(#ffffff, var(--surface0));

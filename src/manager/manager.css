@@ -149,6 +149,7 @@ body {
 }
 
 .search-area {
+  position: relative;
   flex: 1;
   max-width: 420px;
   margin: 0 24px;
@@ -156,12 +157,27 @@ body {
 
 .search-input {
   width: 100%;
-  padding: 8px 12px;
+  padding: 8px 12px 8px 36px;
   border: 1px solid var(--border);
   border-radius: 7px;
   background: var(--base);
   color: var(--text);
   font: inherit;
+}
+
+.search-icon {
+  position: absolute;
+  z-index: 1;
+  top: 50%;
+  left: 12px;
+  width: 16px;
+  height: 16px;
+  transform: translateY(-50%);
+  fill: none;
+  stroke: var(--subtext0);
+  stroke-width: 2;
+  stroke-linecap: round;
+  pointer-events: none;
 }
 
 .search-input::placeholder {

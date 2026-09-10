@@ -35,7 +35,7 @@
   --blue: light-dark(#1e66f5, #89b4fa);
   --text: light-dark(#35363a, #e4e5e7);
   --subtext0: light-dark(#666970, #a8abb2);
-  --overlay0: light-dark(#96999e, #747881);
+  --overlay0: light-dark(#898c91, #747881);
   --overlay2: light-dark(#777a80, #989ca5);
   --surface1: light-dark(#c9cbce, #36383d);
   --surface0: light-dark(#dddfe1, #27282c);
@@ -158,7 +158,7 @@ body {
 .search-input {
   width: 100%;
   padding: 8px 12px 8px 36px;
-  border: 1px solid var(--border);
+  border: 1px solid var(--overlay0);
   border-radius: 7px;
   background: var(--base);
   color: var(--text);
@@ -302,7 +302,7 @@ button.danger:hover { background-color: color-mix(in srgb, var(--red) 12%, trans
   border-radius: 16px;
   font-weight: bold;
   font-size: 14px;
-  color: var(--group-color);
+  color: var(--group-text);
   background-color: light-dark(
     color-mix(in srgb, var(--group-color) 14.9%, #ffffff),
     color-mix(in srgb, var(--group-color) 24.7%, var(--surface0))
@@ -311,15 +311,15 @@ button.danger:hover { background-color: color-mix(in srgb, var(--red) 12%, trans
 }
 
 /* Chromium group colors; Brave blends these over inactive tabs. */
-.color-grey   { --group-color: light-dark(#5f6368, #dadce0); }
-.color-blue   { --group-color: light-dark(#1a73e8, #8ab4f8); }
-.color-red    { --group-color: light-dark(#d93025, #f28b82); }
-.color-yellow { --group-color: light-dark(#f9ab00, #fdd663); }
-.color-green  { --group-color: light-dark(#188038, #81c995); }
-.color-pink   { --group-color: light-dark(#d01884, #ff8bcb); }
-.color-purple { --group-color: light-dark(#a142f4, #c58af9); }
-.color-cyan   { --group-color: light-dark(#007b83, #78d9ec); }
-.color-orange { --group-color: light-dark(#fa903e, #fcad70); }
+.color-grey   { --group-color: light-dark(#5f6368, #dadce0); --group-text: light-dark(#5f6368, #dadce0); }
+.color-blue   { --group-color: light-dark(#1a73e8, #8ab4f8); --group-text: light-dark(#1764ca, #98bdf9); }
+.color-red    { --group-color: light-dark(#d93025, #f28b82); --group-text: light-dark(#c12b21, #f4a099); }
+.color-yellow { --group-color: light-dark(#f9ab00, #fdd663); --group-text: light-dark(#936500, #fdd663); }
+.color-green  { --group-color: light-dark(#188038, #81c995); --group-text: light-dark(#167734, #89cc9b); }
+.color-pink   { --group-color: light-dark(#d01884, #ff8bcb); --group-text: light-dark(#bd1678, #ff99d1); }
+.color-purple { --group-color: light-dark(#a142f4, #c58af9); --group-text: light-dark(#8c39d4, #d1a3fa); }
+.color-cyan   { --group-color: light-dark(#007b83, #78d9ec); --group-text: light-dark(#00727a, #78d9ec); }
+.color-orange { --group-color: light-dark(#fa903e, #fcad70); --group-text: light-dark(#9e5b27, #fcad70); }
 
 .card-actions button {
   font-size: 12px;
@@ -360,7 +360,7 @@ button.danger:hover { background-color: color-mix(in srgb, var(--red) 12%, trans
   place-items: center;
   border-radius: 5px;
   background: var(--mantle);
-  color: var(--blue);
+  color: light-dark(#1b5cdd, var(--blue));
   font-size: 10px;
   font-weight: 700;
 }

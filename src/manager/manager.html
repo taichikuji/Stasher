@@ -14,6 +14,10 @@
 
   <!-- Shared SVG symbols keep icon-only controls accessible without inline scripts. -->
   <svg class="icon-sprite" aria-hidden="true">
+    <symbol id="icon-search" viewBox="2 2 20 20">
+      <circle cx="11" cy="11" r="7" />
+      <path d="m20 20-4-4" />
+    </symbol>
     <symbol id="icon-help" viewBox="2 2 20 20">
       <path d="M9.1 9a3 3 0 1 1 4.9 2.3c-1.2.9-2 1.4-2 2.7M12 17h.01M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18Z" />
     </symbol>
@@ -56,6 +60,7 @@
     </div>
     <div class="search-area">
       <label for="searchInput" class="visually-hidden">Search stash titles, tab titles, and URLs</label>
+      <svg class="search-icon" aria-hidden="true"><use href="#icon-search"></use></svg>
       <input id="searchInput" class="search-input" type="search" placeholder="Search stash titles, tab titles, and URLs" autocomplete="off">
     </div>
     <div class="header-actions" role="group" aria-label="Stash actions">

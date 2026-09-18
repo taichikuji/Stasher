@@ -118,7 +118,7 @@ Before submitting your changes, please test them thoroughly. Ensure:
 3. Your code doesn't generate new warnings or errors
 4. Stashing and restoring both grouped and ungrouped tabs still works
 5. Relevant manager actions, such as editing, deleting, undoing, importing, and exporting, still work
-6. `node --test` passes
+6. `bun test` passes
 7. The extension reloads without errors in Chromium
 
 ## Documentation

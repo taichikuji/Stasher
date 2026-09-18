@@ -1,7 +1,7 @@
 const assert = require('node:assert/strict');
 const { readFileSync } = require('node:fs');
 const { join } = require('node:path');
-const test = require('node:test');
+const { test } = require('bun:test');
 const vm = require('node:vm');
 
 const root = join(__dirname, '..');

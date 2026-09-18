@@ -1,7 +1,7 @@
 const assert = require('node:assert/strict');
 const { readFileSync } = require('node:fs');
 const { join } = require('node:path');
-const test = require('node:test');
+const { test } = require('bun:test');
 
 const css = readFileSync(join(__dirname, '../src/manager/manager.css'), 'utf8');
 

@@ -30,7 +30,7 @@ Do not use `Bump version ...` without a commit type.
 2. Run the automated suite:
 
    ```bash
-   node --test
+   bun test
    ```
 
 3. Run a whitespace check:

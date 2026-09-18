@@ -72,11 +72,10 @@ that cannot be confidently validated is outside the project's current scope.
 
 ## Development
 
-The project has no runtime dependencies. Run the test suite with Node.js 20 or
-newer:
+The project has no runtime dependencies. Run the test suite with Bun:
 
 ```bash
-node --test
+bun test
 ```
 
 Before releasing, test the extension in Chrome and at least one other Chromium

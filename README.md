@@ -5,7 +5,7 @@
 <h1 align="center">Stasher</h1>
 
 <p align="center">
-  Yet Another Tab Manager by <a href="https://github.com/taichikuji">@taichikuji</a>
+  Your Stashes, all in one place!
 </p>
 
 <p align="center">

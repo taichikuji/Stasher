@@ -116,7 +116,7 @@ body {
   background: var(--surface);
   min-height: 34px;
   padding: 15px 20px;
-  border-radius: 10px;
+  border-radius: 6px;
   box-shadow: 0 1px 3px var(--shadow);
   transition: background-color 0.3s, box-shadow 0.3s;
 }
@@ -159,7 +159,7 @@ body {
   width: 100%;
   padding: 8px 12px 8px 36px;
   border: 1px solid var(--overlay0);
-  border-radius: 7px;
+  border-radius: 5px;
   background: var(--base);
   color: var(--text);
   font: inherit;
@@ -189,7 +189,7 @@ button,
   cursor: pointer;
   padding: 8px 16px;
   border: 0;
-  border-radius: 6px;
+  border-radius: 5px;
   background: transparent;
   color: var(--text);
   font-weight: 500;
@@ -222,7 +222,7 @@ button.danger:hover { background-color: color-mix(in srgb, var(--red) 12%, trans
   height: 32px;
   padding: 0;
   margin: 0;
-  border-radius: 7px;
+  border-radius: 5px;
   color: var(--subtext0);
 }
 
@@ -259,7 +259,7 @@ button.danger:hover { background-color: color-mix(in srgb, var(--red) 12%, trans
 
 .stash-card {
   border: 1px solid var(--border);
-  border-radius: 10px;
+  border-radius: 6px;
   background: var(--surface);
   padding: 0;
   margin-bottom: 20px;
@@ -413,7 +413,7 @@ button.danger:hover { background-color: color-mix(in srgb, var(--red) 12%, trans
   font-size: 14px;
   padding: 6px 10px;
   border: 1px solid var(--overlay0);
-  border-radius: 7px;
+  border-radius: 5px;
   flex-grow: 1;
   font-family: inherit;
   background-color: var(--base);
@@ -540,7 +540,7 @@ button.danger:hover { background-color: color-mix(in srgb, var(--red) 12%, trans
   background: var(--surface);
   color: var(--text);
   padding: 24px 32px;
-  border-radius: 10px;
+  border-radius: 6px;
   box-shadow: 0 8px 24px var(--shadow);
 }
 

@@ -45,14 +45,7 @@ The design of Stasher is simple: Stash, and unstash. Everything else is sprinkle
 
 ## Installation
 
-Stasher supports Chromium-based desktop browsers, including Google Chrome,
-Brave, Microsoft Edge, Opera, Vivaldi, and compatible Chromium forks.
-
-1. Open your browser's extensions page (`chrome://extensions`,
-   `brave://extensions`, or `edge://extensions`).
-2. Enable **Developer mode**.
-3. Choose **Load unpacked** and select this directory.
-4. Open the extensions menu and pin Stasher to the toolbar.
+It's available [here!](https://chromewebstore.google.com/detail/stasher/feepkkcjmhhlmbghklpakdijphnlfjok) ( Chrome Web Store ).
 
 ## A small note about Firefox
 
@@ -79,8 +72,6 @@ Stasher was, and still is mostly built for myself. This means there are things t
 If you think there's code or wonkiness that you'd like to try to improve, be my guest. I'd be more than happy to revise this together and build community. The only thing I ask is to please respect how I write code myself. Thanks!
 
 ## Support
-
-Stasher is not currently published in the Chrome Web Store (working on it right now!).
 
 If you would like to support me and my work, you can [buy me a coffee via PayPal](https://paypal.me/ivanperezf).
 

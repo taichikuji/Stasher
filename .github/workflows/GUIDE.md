@@ -91,7 +91,15 @@ The tag push starts the GitHub Actions workflow. It will:
 - run the browser unit tests;
 - read the version from `manifest.json`;
 - package the Chromium extension;
-- upload the package as a workflow artifact.
+- attach the ZIP to the GitHub Release;
+- submit a newer version to the Chrome Web Store for review; reruns of an
+  already submitted version are skipped.
+
+For the first store release, [set up Workload Identity Federation](https://github.com/marketplace/actions/publish-to-chrome-web-store#setting-up-workload-identity-federation)
+and add its service account in the Chrome Web Store Developer Dashboard. Create
+a `chrome-web-store` GitHub environment restricted to `v*` tags, without required
+reviewers. Set Actions variables `CWS_WIF_PROVIDER` (provider resource name),
+`CWS_SERVICE_ACCOUNT` (email), and `CWS_PUBLISHER_ID` (Dashboard publisher ID).
 
 Monitor the run in the [Actions tab](https://github.com/taichikuji/Stasher/actions).
 

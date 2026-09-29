@@ -31,6 +31,8 @@ function runBackground(options = {}) {
   const removedTabs = [];
   const contextMenus = [];
   let items = clone(options.items ?? []);
+  const permissionRequests = [];
+  let groupPermissionGranted = options.groupPermissionGranted !== false;
 
   const api = {
     runtime: {
@@ -47,6 +49,13 @@ function runBackground(options = {}) {
     },
     action: {
       onClicked: eventSlot(listeners, 'actionClicked')
+    },
+    permissions: {
+      request: async details => {
+        permissionRequests.push(clone(details));
+        if (options.permissionRequestGranted !== false) groupPermissionGranted = true;
+        return groupPermissionGranted;
+      }
     },
     contextMenus: {
       create: details => contextMenus.push(clone(details)),
@@ -102,6 +111,7 @@ function runBackground(options = {}) {
     updatedTabs,
     removedTabs,
     contextMenus,
+    permissionRequests,
     getItems: () => clone(items)
   };
 }
@@ -183,6 +193,9 @@ function runManager(initialItems, options = {}) {
         }
       },
       onChanged: eventSlot(listeners, 'storageChanged')
+    },
+    permissions: {
+      contains: async () => options.groupPermissionGranted !== false
     },
     tabs: {
       create: async details => {
@@ -292,6 +305,33 @@ test('stashes a tab group through the Chromium extension API', async () => {
   }]);
 });
 
+test('stashes all grouped tabs without tab group access', async () => {
+  const result = runBackground({
+    groupPermissionGranted: false,
+    permissionRequestGranted: false,
+    groupedTabs: [
+      { id: 11, title: 'One', url: 'https://one.example', windowId: 4, groupId: 7 },
+      { id: 12, title: 'Two', url: 'https://two.example', windowId: 4, groupId: 7 }
+    ]
+  });
+
+  await result.listeners.actionClicked({ id: 11, windowId: 4, groupId: 7 });
+
+  assert.equal(result.getItems()[0].type, 'loose');
+  assert.deepEqual(result.getItems()[0].tabs.map(tab => tab.url), [
+    'https://one.example', 'https://two.example'
+  ]);
+  assert.deepEqual(result.removedTabs, [11, 12]);
+  assert.deepEqual(result.permissionRequests, [{ permissions: ['tabGroups'] }]);
+
+  await result.listeners.actionClicked({ id: 11, windowId: 4, groupId: 7 });
+  assert.deepEqual(result.permissionRequests, [
+    { permissions: ['tabGroups'] },
+    { permissions: ['tabGroups'] }
+  ]);
+  assert.equal(result.getItems()[0].type, 'loose');
+});
+
 test('renders a browser-cached favicon with a letter fallback', () => {
   const result = runManager([]);
   const linkItem = vm.runInContext(
@@ -341,6 +381,7 @@ test('registers the tab menu and stashes exactly the right-clicked tab', async (
     url: 'https://pinned.example'
   }]);
   assert.deepEqual(result.removedTabs, [51]);
+  assert.deepEqual(result.permissionRequests, []);
 });
 
 test('stashes eligible loose tabs through the toolbar action', async () => {
@@ -492,6 +533,21 @@ test('restores a tab group through the Chromium extension API', async () => {
 
   await vm.runInContext('handleUndo()', result.context);
 
+  assert.deepEqual(result.getItems(), []);
+});
+
+test('restores saved groups as ordinary tabs without access and never prompts automatically', async () => {
+  const stash = {
+    id: 'restore-without-access', type: 'group', title: 'Saved group', color: 'blue',
+    tabs: [{ title: 'One', url: 'https://one.example' }]
+  };
+  const result = runManager([stash], { groupPermissionGranted: false });
+
+  await vm.runInContext(`restoreGroup(${JSON.stringify(stash)})`, result.context);
+
+  assert.equal(result.createdTabs.length, 1);
+  assert.deepEqual(result.groupedTabs, []);
+  assert.deepEqual(result.updatedGroups, []);
   assert.deepEqual(result.getItems(), []);
 });
 
@@ -771,6 +827,8 @@ test('manifest defines a Chromium MV3 service worker', () => {
   );
   assert.equal(manifest.permissions.includes('favicon'), true);
   assert.equal(manifest.permissions.includes('contextMenus'), true);
+  assert.equal(manifest.permissions.includes('tabGroups'), false);
+  assert.deepEqual(manifest.optional_permissions, ['tabGroups']);
   assert.match(managerHtml, /<main id="stash-container" tabindex="-1" aria-live="polite">/);
 });
 

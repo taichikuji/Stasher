@@ -445,6 +445,8 @@ async function restoreGroup(item) {
   try {
     const tabs = Array.isArray(item.tabs) ? item.tabs.filter(t => isAllowedTabUrl(t.url)) : [];
     if (tabs.length === 0) return;
+    const canRestoreGroup = item.type === 'group' &&
+      await chrome.permissions.contains({ permissions: ['tabGroups'] });
 
     // 1. Create Tabs
     const created = await Promise.all(
@@ -452,7 +454,7 @@ async function restoreGroup(item) {
     );
     tabIds.push(...created.map(t => t.id));
 
-    if (item.type === 'group') {
+    if (canRestoreGroup) {
       // 2. Create Group
       const groupId = await chrome.tabs.group({ tabIds });
 

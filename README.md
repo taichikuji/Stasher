@@ -33,6 +33,11 @@ Just like you can stash tab groups, and tabs, you can also view, edit, or even d
 When Stasher saves loose tabs, it leaves pinned tabs in place so the tab strip
 keeps its usual shape.
 
+Tab group access is optional. Clicking the Stasher icon requests it so group
+names and colors can be saved and restored. If you decline, Stasher still saves
+the tabs but restores them as ordinary tabs. Clicking the icon again requests
+access again until you grant it.
+
 ## What it does not do
 
 - It does not have any kind of sideBar, and does not intend to be an always-there manager.

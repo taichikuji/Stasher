@@ -1,16 +1,16 @@
 {
   "manifest_version": 3,
   "name": "Stasher",
-  "version": "2.2.3",
+  "version": "2.3.0",
   "description": "Yet Another Tab Manager by @taichikuji",
   "homepage_url": "https://github.com/taichikuji/Stasher",
   "permissions": [
     "tabs",
-    "tabGroups",
     "storage",
     "favicon",
     "contextMenus"
   ],
+  "optional_permissions": ["tabGroups"],
   "content_security_policy": {
     "extension_pages": "script-src 'self'; object-src 'none'"
   },

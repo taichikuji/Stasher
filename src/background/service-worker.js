@@ -14,6 +14,7 @@ const CONFIG = {
 };
 
 const MANAGER_URL = chrome.runtime.getURL(CONFIG.MANAGER_PATH);
+const UNGROUPED_ID = -1;
 
 /**
  * Opens or focuses the Stasher manager tab.
@@ -94,6 +95,10 @@ const handleStash = async (tab, singleTab = false) => {
     let stashData = null;
     let tabsToStash = [];
     let tabGroup;
+    // Request before other awaits so Chrome sees the toolbar click's user gesture.
+    const canReadGroups = !singleTab && await chrome.permissions.request({
+      permissions: ['tabGroups']
+    }).catch(() => false);
 
     // Chromium allows users to highlight multiple tabs in the tab strip. When
     // they do, that explicit selection takes precedence over the usual
@@ -111,7 +116,7 @@ const handleStash = async (tab, singleTab = false) => {
       const selectedGroupIds = new Set(tabsToStash.map(t => t.groupId));
       if (
         selectedGroupIds.size === 1 &&
-        !selectedGroupIds.has(chrome.tabGroups.TAB_GROUP_ID_NONE)
+        !selectedGroupIds.has(UNGROUPED_ID) && canReadGroups
       ) {
         const [selectedGroupId] = selectedGroupIds;
         tabGroup = await chrome.tabGroups.get(selectedGroupId);
@@ -119,8 +124,8 @@ const handleStash = async (tab, singleTab = false) => {
     }
 
     // Scenario 1: Stash a specific Tab Group
-    else if (currentGroupId !== chrome.tabGroups.TAB_GROUP_ID_NONE) {
-      tabGroup = await chrome.tabGroups.get(currentGroupId);
+    else if (currentGroupId !== UNGROUPED_ID) {
+      if (canReadGroups) tabGroup = await chrome.tabGroups.get(currentGroupId);
       const tabsInGroup = await chrome.tabs.query({ groupId: currentGroupId });
 
       tabsToStash = filterStashableTabs(tabsInGroup);
@@ -130,7 +135,7 @@ const handleStash = async (tab, singleTab = false) => {
     else {
       const looseTabs = await chrome.tabs.query({
         windowId: currentWindowId,
-        groupId: chrome.tabGroups.TAB_GROUP_ID_NONE
+        groupId: UNGROUPED_ID
       });
 
       tabsToStash = filterStashableTabs(looseTabs);

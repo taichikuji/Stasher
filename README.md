@@ -8,9 +8,9 @@
   Your new favorite way of managing tabs! 🐈‍⬛
 </p>
 
-Stasher is a small, simple, straightforward way of managing your tabs. Allows you to "stash" them onto local disk. This saves on memory and they store safely even if your browser suddenly crashes or closes.
+Stasher is a small, simple, and straightforward way to manage your tabs. Save tabs and tab groups to local Chrome storage so they stay safe even if your browser suddenly crashes or closes.
 
-Just like you can stash tab groups, and tabs, you can also view, edit, or even do cleanup "crazy style". Stasher respects your space and time, and stays out of your way when you don't need it.
+You can view, edit, search, restore, and clean up your saved tabs from Stasher's manager. It respects your space and time, and stays out of your way when you do not need it.
 
 ## Preview
 
@@ -18,49 +18,67 @@ Just like you can stash tab groups, and tabs, you can also view, edit, or even d
   <img src="assets/stasher-preview.webp" alt="Stasher preview" width="720">
 </p>
 
-## What it does
+## How it works
 
-- Store singular tabs with right-click -> `Stash this tab`
-- Store tab groups in one sweep with clicking the Stasher's icon @ top right, or press **⌥**+**S**
-- Keep things clean and ordered within the Stasher's manager view
-- You can rename or change the metadata _(tab group color!)_ for a tabgroup
-- Search stash titles, tab titles, and URLs
-- Restore a whole stash or open individual tabs from it, do it your way!
-- Want to copy your configuration elsewhere? Use the import/export feature
-- No data leaves your device.
-- Has both a dark and light theme, which syncs with your browser configuration!
+Stasher's core workflow is simple: stash tabs, then unstash them when you need them.
 
-When Stasher saves loose tabs, it leaves pinned tabs in place so the tab strip
-keeps its usual shape.
+### Save tabs
 
-Tab group access is optional. Clicking the Stasher icon requests it so group
-names and colors can be saved and restored. If you decline, Stasher still saves
-the tabs but restores them as ordinary tabs. Clicking the icon again requests
-access again until you grant it.
+```mermaid
+flowchart LR
+  A["Tab group exists in Chrome"] --> B(["Press Stasher icon / ⌥+S"])
+  B --> C{"Group access granted?"}
+  C -->|Yes| D["Save tabs + group name/color"]
+  C -->|No| E["Save tabs only"]
+  D --> F["Local stash in manager"]
+  E --> F
+```
 
-## What it does not do
+### Restore tabs
 
-- It does not have any kind of sideBar, and does not intend to be an always-there manager.
-- Stasher's search engine stays constrained within the manager. It does not allow you to use the search bar to search tabs.
-- It does not require an account to use it.
-- There's no AI features, and does not try to automatically modify things on your behalf to "improve it". It's your mess. You deal with it.
-- It is simple on purpose, it does not permit every single configuration on earth.
+```mermaid
+flowchart LR
+  A["Stash exists in manager"] --> B{"Open whole stash or one tab?"}
+  B -->|Whole stash| C{"Group metadata available?"}
+  C -->|Yes| D["Restore grouped tabs<br/>name + color"]
+  C -->|No| E["Restore ordinary tabs"]
+  B -->|One tab| F["Open selected tab"]
+```
 
-The design of Stasher is simple: Stash, and unstash. Everything else is sprinkle on top.
+## Details
+
+* Search stash names, tab titles, and URLs
+* Rename stashes and change saved tab-group metadata, including the group color
+* Import and export JSON backups
+* Store saved tab titles and URLs in Chrome local storage on this device
+* Use dark and light themes that follow your browser configuration
+* Preserve pinned tabs when saving loose tabs so the tab strip keeps its usual shape
+
+Tab-group access is optional. Clicking the Stasher icon requests access so group names and colors can be saved and restored. If access is declined, Stasher still saves the tabs but restores them as ordinary tabs. Clicking the icon again requests access until it is granted.
+
+## Scope
+
+* No sidebar or always-visible manager
+* Search is limited to the Stasher manager
+* No account or cloud sync
+* No AI features or automatic modifications
+* No attempt to offer every possible configuration
+
+It is simple on purpose. It's your mess. You deal with it.
 
 ## Installation
 
-It's available [here!](https://chromewebstore.google.com/detail/stasher/feepkkcjmhhlmbghklpakdijphnlfjok) ( Chrome Web Store ).
+Install Stasher from the [Chrome Web Store](https://chromewebstore.google.com/detail/stasher/feepkkcjmhhlmbghklpakdijphnlfjok).
 
 ## A small note about Firefox
 
-Stasher has always been developed on Chromium based browsers. This means that Firefox is not supported.
+Stasher has always been developed for Chromium-based browsers. Firefox is not officially supported.
 
-This does not mean it is not _compatible_ however you may need some tweaking or even to port it. I'd be more than happy to accept said ports to the codebase if the need arises.
+It may still be possible to make Stasher compatible with Firefox, but doing so could require adjustments or a port. Contributions are welcome.
 
 ## Development
 
-If you plan on fixing bugs or develop new features, this is your place;
+If you plan to fix bugs or develop new features, this is the place to start.
 
 The project has no runtime dependencies. Run the test suite with Bun:
 
@@ -68,27 +86,29 @@ The project has no runtime dependencies. Run the test suite with Bun:
 bun test
 ```
 
-Before releasing, test the extension in Chrome and at least one other Chromium browser such as Brave or Edge. The release workflow is documented in [GUIDE.md](.github/workflows/GUIDE.md).
+Before releasing, test the extension in Chrome and at least one other Chromium-based browser, such as Brave or Edge. The release workflow is documented in [GUIDE.md](.github/workflows/GUIDE.md).
 
 ## Contributing
 
-Stasher was, and still is mostly built for myself. This means there are things that I avoided, on purpose or not.
+Stasher was, and still is, mostly built for myself. That means there are things I intentionally avoided, whether by design or otherwise.
 
-If you think there's code or wonkiness that you'd like to try to improve, be my guest. I'd be more than happy to revise this together and build community. The only thing I ask is to please respect how I write code myself. Thanks!
+If you see something you would like to improve, be my guest. I would be happy to revise this together and build a community around it. The only thing I ask is that you respect the way I write code.
+
+Thanks for taking the time to test Stasher and give it a try.
 
 ## Support
 
-If you would like to support me and my work, you can [buy me a coffee via PayPal](https://paypal.me/ivanperezf).
+If you would like to support the project, you can [buy me a coffee via PayPal](https://paypal.me/ivanperezf).
 
 ## Icon palette
 
-- Red: [#ef5b5b](https://www.color-hex.com/color/ef5b5b)
-- Purple: [#855bef](https://www.color-hex.com/color/855bef)
-- Yellow: [#efde5b](https://www.color-hex.com/color/efde5b)
-- Pink: [#ffa8a8](https://www.color-hex.com/color/ffa8a8)
+* Red: [#ef5b5b](https://www.color-hex.com/color/ef5b5b)
+* Purple: [#855bef](https://www.color-hex.com/color/855bef)
+* Yellow: [#efde5b](https://www.color-hex.com/color/efde5b)
+* Pink: [#ffa8a8](https://www.color-hex.com/color/ffa8a8)
 
-Found a bug or have an idea? Please report it with enough context to reproduce the behavior.
+Found a bug or have an idea? Please report it with enough context to reproduce the problem.
 
-Thanks for everything and for taking the time to test and give Stasher a try.
+Thanks for everything and for taking the time to test Stasher.
 
 Much love~ ❤️🐱

@@ -24,47 +24,60 @@ Stasher's core workflow is simple: stash tabs, then unstash them when you need t
 
 ### Save tabs
 
+Right-click a tab and choose **Stash this tab**, or click the Stasher icon / press **Alt+S** to stash tabs from the current window.
+
 ```mermaid
-flowchart LR
-  A["Tab group exists in Chrome"] --> B(["Press Stasher icon / ⌥+S"])
-  B --> C{"Group access granted?"}
-  C -->|Yes| D["Save tabs + group name/color"]
-  C -->|No| E["Save tabs only"]
-  D --> F["Local stash in manager"]
-  E --> F
+flowchart TD
+  accTitle: How Stasher saves tabs
+  accDescr: Stash one chosen tab, multiple selected tabs, the active tab's group, or loose tabs. Filter excluded tabs, save locally, open the manager, and close saved tabs. If none are eligible, only open the manager.
+  Start(["Start stashing"]) --> Single{"Stash this tab?"}
+  Single -->|Yes| Chosen["Choose that tab"]
+  Single -->|No| Selected{"Multiple tabs selected?"}
+  Selected -->|Yes| Selection["Choose selected tabs"]
+  Selected -->|No| Group{"Active tab in a group?"}
+  Group -->|Yes| GroupTabs["Choose that group's tabs"]
+  Group -->|No| Loose["Choose loose tabs in this window"]
+  Chosen --> Filter["Skip excluded tabs"]
+  Selection --> Filter
+  GroupTabs --> Filter
+  Loose --> Filter
+  Filter --> Eligible{"Any eligible tabs?"}
+  Eligible -->|No| ManagerOnly["Open or focus manager; leave tabs open"]
+  Eligible -->|Yes| Save["Save tabs locally"]
+  Save --> Manager["Open or focus manager"]
+  Manager --> Close["Close saved tabs"]
 ```
+
+Stasher accepts `http:`, `https:`, and `chrome-extension:` URLs. It skips its own manager, new-tab and blank pages, invalid URLs, and other URL schemes. Pinned tabs stay open unless you explicitly right-click one and choose **Stash this tab**. Tabs are saved before they are closed; if saving fails, they stay open.
+
+Tab-group access is optional and is requested when you use the icon or shortcut. With access, Stasher saves the group name and color when the eligible tabs all belong to one group. A selection spanning groups or including loose tabs is saved as a loose stash. Right-clicking a single tab also saves it as a loose stash. If access is declined, tabs are still saved without group metadata; the next icon or shortcut use requests access again.
 
 ### Restore tabs
 
+Click a saved tab's link to open it individually. To restore a whole stash, use its restore button or double-click its title.
+
 ```mermaid
-flowchart LR
-  A["Stash exists in manager"] --> B{"Open whole stash or one tab?"}
-  B -->|Whole stash| C{"Group metadata available?"}
-  C -->|Yes| D["Restore grouped tabs<br/>name + color"]
-  C -->|No| E["Restore ordinary tabs"]
-  B -->|One tab| F["Open selected tab"]
+flowchart TD
+  accTitle: How Stasher restores tabs
+  accDescr: Opening one tab keeps the stash. Restoring a whole stash opens eligible tabs, groups them only for a saved group with permission, and removes the stash after a successful restore.
+  Start(["Choose a saved stash"]) --> Whole{"Open the whole stash?"}
+  Whole -->|No| Single["Open selected tab"]
+  Single --> Keep["Keep saved stash"]
+  Whole -->|Yes| Open["Open eligible tabs"]
+  Open --> Group{"Saved as a group?"}
+  Group -->|No| Ordinary["Keep tabs ungrouped"]
+  Group -->|Yes| Access{"Group access granted?"}
+  Access -->|No| Ordinary
+  Access -->|Yes| Grouped["Group tabs with saved name and color"]
+  Ordinary --> Remove["Remove saved stash after success"]
+  Grouped --> Remove
 ```
 
-## Details
+Restoring uses existing group permission and never requests it. Renaming or recoloring a loose stash does not turn it into a group. If there are no eligible URLs, the stash stays saved. If restoration or stash removal fails, the stash is kept, though some tabs may already have opened. Restored tabs open unpinned; successful whole-stash restoration removes the stash without adding an Undo action.
 
-* Search stash names, tab titles, and URLs
-* Rename stashes and change saved tab-group metadata, including the group color
-* Import and export JSON backups
-* Store saved tab titles and URLs in Chrome local storage on this device
-* Use dark and light themes that follow your browser configuration
-* Preserve pinned tabs when saving loose tabs so the tab strip keeps its usual shape
+In the manager, search stash names, tab titles, and URLs, rename stashes, change their colors, or remove saved tabs and stashes. Import and export JSON backups to move your stashes between devices. Saved titles and URLs stay in Chrome local storage on this device, with no account or cloud sync.
 
-Tab-group access is optional. Clicking the Stasher icon requests access so group names and colors can be saved and restored. If access is declined, Stasher still saves the tabs but restores them as ordinary tabs. Clicking the icon again requests access until it is granted.
-
-## Scope
-
-* No sidebar or always-visible manager
-* Search is limited to the Stasher manager
-* No account or cloud sync
-* No AI features or automatic modifications
-* No attempt to offer every possible configuration
-
-It is simple on purpose. It's your mess. You deal with it.
+Stasher is an on-demand manager, with search inside the manager and light/dark themes that follow your browser configuration. It is simple on purpose. It's your mess. You deal with it.
 
 ## Installation
 

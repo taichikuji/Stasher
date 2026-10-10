@@ -214,9 +214,9 @@ button,
 button:hover,
 .icon-button:hover { background-color: light-dark(var(--surface0), var(--surface1)); }
 button:disabled { cursor: wait; opacity: 0.55; }
-button.primary { color: var(--blue); }
+button.primary { --button-color: var(--blue); color: var(--button-color); }
 button.primary:hover { background-color: color-mix(in srgb, var(--blue) 12%, transparent); }
-button.danger { color: var(--red); }
+button.danger { --button-color: var(--red); color: var(--button-color); }
 button.danger:hover { background-color: color-mix(in srgb, var(--red) 12%, transparent); }
 .icon-only .button-icon,
 .header-actions .button-icon { width: 18px; height: 18px; margin-right: 0; }
@@ -482,6 +482,7 @@ button.danger:hover { background-color: color-mix(in srgb, var(--red) 12%, trans
 .modal-box {
   background: var(--surface);
   padding: 24px;
+  font-size: 14px;
 }
 
 .modal-box h2 {
@@ -493,7 +494,6 @@ button.danger:hover { background-color: color-mix(in srgb, var(--red) 12%, trans
 .modal-description {
   margin: 0 0 20px;
   color: var(--subtext0);
-  font-size: 14px;
   line-height: 1.5;
 }
 
@@ -507,20 +507,19 @@ button.danger:hover { background-color: color-mix(in srgb, var(--red) 12%, trans
 .modal-box button {
   margin: 0;
   font: inherit;
-  font-size: 14px;
 }
 
 button.secondary {
   border: 1px solid var(--overlay0);
 }
 
-button.danger.filled {
-  background: var(--red);
+button.filled {
+  background: var(--button-color);
   color: light-dark(#ffffff, var(--mantle));
 }
 
-button.danger.filled:hover {
-  background: color-mix(in srgb, var(--red) 85%, var(--text));
+button.filled:hover {
+  background: color-mix(in srgb, var(--button-color) 85%, var(--text));
 }
 
 textarea {

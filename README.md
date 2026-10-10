@@ -54,30 +54,48 @@ Tab-group access is optional and is requested when you use the icon or shortcut.
 
 ### Restore tabs
 
-Click a saved tab's link to open it individually. To restore a whole stash, use its restore button or double-click its title.
+Click a saved tab's link to open it individually; the stash stays saved. To restore a whole stash, use its restore button or double-click its title. Settings can make a title double-click open the title/color editor instead.
 
 ```mermaid
 flowchart TD
   accTitle: How Stasher restores tabs
-  accDescr: Opening one tab keeps the stash. Restoring a whole stash opens eligible tabs, groups them only for a saved group with permission, and removes the stash after a successful restore.
+  accDescr: Opening one tab keeps the stash. Restoring a whole stash opens eligible background tabs, optionally unloads them, groups saved groups with permission, and keeps or removes the stash according to Settings after success. Restoration failures preserve the stash.
   Start(["Choose a saved stash"]) --> Whole{"Open the whole stash?"}
   Whole -->|No| Single["Open selected tab"]
   Single --> Keep["Keep saved stash"]
   Whole -->|Yes| Open["Open eligible tabs"]
-  Open --> Group{"Saved as a group?"}
+  Open --> Unload{"Unload setting enabled?"}
+  Unload -->|Yes| Discard["Unload each background tab; continue if unloading fails"]
+  Unload -->|No| Group{"Saved as a group?"}
+  Discard --> Group
   Group -->|No| Ordinary["Keep tabs ungrouped"]
   Group -->|Yes| Access{"Group access granted?"}
   Access -->|No| Ordinary
   Access -->|Yes| Grouped["Group tabs with saved name and color"]
-  Ordinary --> Remove["Remove saved stash after success"]
-  Grouped --> Remove
+  Ordinary --> Retain{"Keep after restoration enabled?"}
+  Grouped --> Retain
+  Retain -->|Yes| Keep
+  Retain -->|No| Remove["Remove saved stash after success"]
 ```
 
-Restoring uses existing group permission and never requests it. Renaming or recoloring a loose stash does not turn it into a group. If there are no eligible URLs, the stash stays saved. If restoration or stash removal fails, the stash is kept, though some tabs may already have opened. Restored tabs open unpinned; successful whole-stash restoration removes the stash without adding an Undo action.
+Restoring uses existing group permission and never requests it. Renaming or recoloring a loose stash does not turn it into a group. If there are no eligible URLs, the stash stays saved. If restoration or stash removal fails, the stash is kept, though some tabs may already have opened. Restored tabs open unpinned and in the background; successful whole-stash restoration removes the stash without adding an Undo action unless **Keep tabs after restoration** is enabled.
 
-In the manager, search stash names, tab titles, and URLs, rename stashes, change their colors, or remove saved tabs and stashes. The **More actions** (⋮) button opens Help, Export, Import, and Delete all stashes; click outside or press Escape to close it. Import and export JSON backups to move your stashes between devices. Saved titles and URLs stay in Chrome local storage on this device, with no account or cloud sync.
+In the manager, search stash names, tab titles, and URLs, rename stashes, change their colors, or remove saved tabs and stashes. The **More actions** (⋮) button opens Help, Export, Import, Settings, and Delete all stashes; click outside or press Escape to close it. Import and export JSON backups to move your stashes between devices. Saved titles and URLs stay in Chrome local storage on this device, with no account or cloud sync.
 
-Stasher is an on-demand manager, with search inside the manager and light/dark themes that follow your browser configuration. It is simple on purpose. It's your mess. You deal with it.
+### Settings
+
+Open **More actions → Settings**. Changes save automatically on this device and synchronize between open manager tabs. All four switches default off:
+
+| Setting | Default behavior |
+| --- | --- |
+| Open Stasher on browser startup | Does not open automatically. |
+| Keep tabs after restoration | Removes the saved stash after successful restoration. |
+| Double-click stash titles to edit | Double-click restores the stash. |
+| Unload restored background tabs until accessed | Restored tabs load normally. |
+
+Startup opening reuses an existing manager or opens one pinned in the background in a normal window, preserving your selected tab. It does not stash tabs. Keeping tabs and unloading apply only to whole-stash restoration; individual saved links keep their usual behavior. Unloading preserves groups, and tabs load when selected. They may briefly start loading before Chrome unloads them; if unloading fails, restoration still finishes and Stasher reports that some tabs remain loaded. Settings are not included in stash exports.
+
+Stasher opens on demand by default, with search inside the manager and light/dark themes that follow your browser configuration. It is simple on purpose. It's your mess. You deal with it.
 
 ## Installation
 

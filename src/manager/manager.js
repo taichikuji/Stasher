@@ -14,17 +14,32 @@ const CONFIG = {
   ALLOWED_SCHEMES: ['http:', 'https:', 'chrome-extension:']
 };
 
+const PREFERENCE_DEFAULTS = {
+  openOnStartup: false,
+  keepAfterRestore: false,
+  editOnDoubleClick: false,
+  unloadAfterRestore: false
+};
+
 // State Management
 const state = {
   undoStack: [],
   notificationTimeout: null,
-  restoringIds: new Set()
+  restoringIds: new Set(),
+  preferences: null,
+  preferencesRevision: 0,
+  savingPreferences: new Set()
 };
 
 // Storage Helpers
 const getStashItems = async () => {
   const result = await chrome.storage.local.get({ [CONFIG.STORAGE_KEY]: [] });
   return Array.isArray(result[CONFIG.STORAGE_KEY]) ? result[CONFIG.STORAGE_KEY] : [];
+};
+
+const getPreferences = async () => {
+  const values = await chrome.storage.local.get(PREFERENCE_DEFAULTS);
+  return Object.fromEntries(Object.keys(PREFERENCE_DEFAULTS).map(key => [key, values[key] === true]));
 };
 
 // The same lock used by the service worker prevents concurrent read-modify-write updates.
@@ -65,8 +80,14 @@ const elements = {
   importModal: document.getElementById('import-modal'),
   oneTabText: document.getElementById('onetab-text'),
   searchInput: document.getElementById('searchInput'),
-  confirmModal: document.getElementById('confirm-modal')
+  confirmModal: document.getElementById('confirm-modal'),
+  settingsBtn: document.getElementById('settingsBtn'),
+  settingsModal: document.getElementById('settings-modal'),
+  settingsError: document.getElementById('settings-error'),
+  moreBtn: document.getElementById('moreBtn')
 };
+const preferenceInputs = Object.fromEntries(Object.keys(PREFERENCE_DEFAULTS)
+  .map(key => [key, document.getElementById(key)]));
 
 const iconMarkup = (name) =>
   `<svg class="button-icon" aria-hidden="true"><use href="#icon-${name}"></use></svg>`;
@@ -76,8 +97,15 @@ loadStashes();
 
 // Listen for local storage changes to update UI
 chrome.storage.onChanged.addListener((changes, namespace) => {
-  if (namespace === 'local' && changes[CONFIG.STORAGE_KEY]) {
-    loadStashes();
+  if (namespace !== 'local') return;
+  if (changes[CONFIG.STORAGE_KEY]) loadStashes();
+  for (const [key, input] of Object.entries(preferenceInputs)) {
+    if (!changes[key]) continue;
+    state.preferencesRevision++;
+    if (state.preferences) {
+      state.preferences[key] = changes[key].newValue === true;
+      input.checked = state.preferences[key];
+    }
   }
 });
 
@@ -294,7 +322,16 @@ function renderViewMode(container, item) {
   badge.className = `group-badge color-${safeColor(item.color)}`;
   badge.textContent = item.title || (item.type === 'group' ? 'Untitled Group' : 'Ungrouped Tabs');
   badge.style.cursor = 'pointer';
-  badge.addEventListener('dblclick', () => restoreGroup(item));
+  badge.addEventListener('dblclick', async () => {
+    try {
+      const preferences = await getPreferences();
+      if (preferences.editOnDoubleClick) renderEditMode(container, item);
+      else await restoreGroup(item, preferences);
+    } catch (error) {
+      console.error('Error loading preferences:', error);
+      showNotification('Could not load settings. Please try again.');
+    }
+  });
 
   // 2. Edit Pencil Button
   const editBtn = document.createElement('button');
@@ -421,6 +458,7 @@ function renderEditMode(container, item) {
 
   wrapper.append(input, colorPicker, saveBtn, cancelBtn);
   container.appendChild(wrapper);
+  input.focus();
 }
 
 async function updateStashData(id, newTitle, newColor) {
@@ -437,27 +475,39 @@ async function updateStashData(id, newTitle, newColor) {
   }
 }
 
-async function restoreGroup(item) {
+async function restoreGroup(item, preferences) {
   // Avoid creating duplicate tabs when the restore control is activated twice.
   if (!item?.id || state.restoringIds.has(item.id)) return;
   state.restoringIds.add(item.id);
   const tabIds = [];
 
   try {
+    preferences ??= await getPreferences();
     const tabs = Array.isArray(item.tabs) ? item.tabs.filter(t => isAllowedTabUrl(t.url)) : [];
     if (tabs.length === 0) return;
     const canRestoreGroup = item.type === 'group' &&
       await chrome.permissions.contains({ permissions: ['tabGroups'] });
 
     // 1. Create Tabs
-    const created = await Promise.all(
-      tabs.map(t => chrome.tabs.create({ url: t.url, active: false }))
-    );
-    tabIds.push(...created.map(t => t.id));
+    let unloadFailures = 0;
+    const created = await Promise.all(tabs.map(async t => {
+      const tab = await chrome.tabs.create({ url: t.url, active: false });
+      tabIds.push(tab.id);
+      if (preferences.unloadAfterRestore) {
+        try {
+          const discarded = await chrome.tabs.discard(tab.id);
+          if (!discarded?.discarded) unloadFailures++;
+        } catch (error) {
+          console.error('Error unloading restored tab:', error);
+          unloadFailures++;
+        }
+      }
+      return tab;
+    }));
 
     if (canRestoreGroup) {
       // 2. Create Group
-      const groupId = await chrome.tabs.group({ tabIds });
+      const groupId = await chrome.tabs.group({ tabIds: created.map(tab => tab.id) });
 
       // 3. Apply Properties
       await chrome.tabGroups.update(groupId, {
@@ -469,14 +519,18 @@ async function restoreGroup(item) {
 
     // 4. Cleanup Storage. Await this so a successful restore cannot silently
     // leave a second, apparently unrestored copy behind.
-    const deleted = await deleteStash(item.id, { undo: false });
-    if (!deleted) throw new Error('Restored stash was not found during cleanup');
-    showNotification('Restored your tabs.');
+    if (!preferences.keepAfterRestore) {
+      const deleted = await deleteStash(item.id, { undo: false });
+      if (!deleted) throw new Error('Restored stash was not found during cleanup');
+    }
+    showNotification(unloadFailures
+      ? 'Restored your tabs. Some tabs could not be unloaded and remain loaded.'
+      : 'Restored your tabs.');
 
   } catch (error) {
     console.error("Error restoring group:", error);
     showNotification(tabIds.length
-      ? 'Tabs were opened, but the saved stash could not be removed. It was kept to avoid data loss.'
+      ? 'Tabs were opened, but restoration could not finish. The saved stash was kept to avoid data loss.'
       : 'Could not restore this stash. Your saved tabs were kept.');
   } finally {
     state.restoringIds.delete(item.id);
@@ -747,6 +801,11 @@ function setupEventListeners() {
   elements.deleteAllBtn.onclick = handleDeleteAll;
   elements.exportBtn.onclick = handleExport;
   elements.importBtn.onclick = showImportModal;
+  elements.settingsBtn.onclick = showSettings;
+  elements.settingsModal.addEventListener('close', () => elements.moreBtn.focus());
+  for (const [key, input] of Object.entries(preferenceInputs)) {
+    input.addEventListener('change', () => savePreference(key));
+  }
   elements.importFile.onchange = () => handleImport();
   elements.searchInput.oninput = loadStashes;
   document.addEventListener('keydown', event => {
@@ -755,6 +814,55 @@ function setupEventListeners() {
       elements.searchInput.focus();
     }
   });
+}
+
+async function showSettings() {
+  for (const input of Object.values(preferenceInputs)) input.disabled = true;
+  state.preferences = null;
+  elements.settingsError.hidden = true;
+  elements.settingsModal.showModal();
+  try {
+    // Retry if another manager changed settings during this read.
+    let revision;
+    let preferences;
+    do {
+      revision = state.preferencesRevision;
+      preferences = await getPreferences();
+    } while (revision !== state.preferencesRevision);
+    state.preferences = preferences;
+    for (const [key, input] of Object.entries(preferenceInputs)) {
+      input.checked = preferences[key];
+      input.disabled = state.savingPreferences.has(key);
+    }
+  } catch (error) {
+    console.error('Error loading preferences:', error);
+    elements.settingsError.textContent = 'Could not load settings. Close this dialog and try again.';
+    elements.settingsError.hidden = false;
+  }
+}
+
+async function savePreference(key) {
+  const input = preferenceInputs[key];
+  if (!state.preferences || state.savingPreferences.has(key) || input.disabled) return;
+  const value = input.checked;
+  const previous = state.preferences[key];
+  const revision = state.preferencesRevision;
+  state.savingPreferences.add(key);
+  input.disabled = true;
+  elements.settingsError.hidden = true;
+  try {
+    await chrome.storage.local.set({ [key]: value });
+    if (state.preferences && revision === state.preferencesRevision) state.preferences[key] = value;
+    input.checked = state.preferences?.[key] ?? value;
+  } catch (error) {
+    console.error('Error saving preference:', error);
+    input.checked = state.preferences?.[key] ?? previous;
+    elements.settingsError.textContent = 'Could not save this setting. Its previous value was restored. Please try again.';
+    elements.settingsError.hidden = false;
+  } finally {
+    state.savingPreferences.delete(key);
+    input.disabled = state.preferences === null;
+  }
 }
 
 // Cat easter egg — deliberately isolated from application logic.

@@ -20,6 +20,45 @@ function eventSlot(listeners, name) {
   return {
     addListener(listener) {
       listeners[name] = listener;
+    },
+    removeListener(listener) {
+      if (listeners[name] === listener) delete listeners[name];
+    }
+  };
+}
+
+function createStorage(initial, options = {}) {
+  const values = clone(initial);
+  const subscribers = new Set();
+  const writes = [];
+  return {
+    writes,
+    snapshot: () => clone(values),
+    onChanged: {
+      addListener: listener => subscribers.add(listener)
+    },
+    local: {
+      async get(query) {
+        const keys = typeof query === 'string' ? [query] : Array.isArray(query) ? query : Object.keys(query ?? values);
+        if (options.failPreferenceGet && keys.includes('openOnStartup')) throw new Error('Storage read failed');
+        return clone(Object.fromEntries(keys.filter(key => key in values || (query && typeof query === 'object' && !Array.isArray(query)))
+          .map(key => [key, key in values ? values[key] : query[key]])));
+      },
+      async set(update) {
+        writes.push(clone(update));
+        if (writes.length === options.failStorageSetAt) throw new Error('Storage update failed');
+        const changes = {};
+        for (const [key, value] of Object.entries(clone(update))) {
+          changes[key] = { ...(key in values ? { oldValue: values[key] } : {}), newValue: value };
+          values[key] = value;
+        }
+        for (const listener of subscribers) listener(clone(changes), 'local');
+      },
+      async remove(key) {
+        const oldValue = values[key];
+        delete values[key];
+        for (const listener of subscribers) listener({ [key]: { oldValue } }, 'local');
+      }
     }
   };
 }
@@ -30,22 +69,24 @@ function runBackground(options = {}) {
   const updatedTabs = [];
   const removedTabs = [];
   const contextMenus = [];
-  let items = clone(options.items ?? []);
+  const errors = [];
+  const storage = createStorage({ stashedItems: options.items ?? [], ...options.preferences }, options);
+  const sessionStorage = options.sessionStorage ?? createStorage({});
+  storage.session = sessionStorage.local;
+  const windows = options.windows ?? [{ id: 4, type: 'normal', focused: true, incognito: false }];
   const permissionRequests = [];
   let groupPermissionGranted = options.groupPermissionGranted !== false;
 
   const api = {
     runtime: {
       getURL: path => `chrome-extension://stasher/${path}`,
-      onInstalled: eventSlot(listeners, 'installed')
+      onInstalled: eventSlot(listeners, 'installed'),
+      onStartup: eventSlot(listeners, 'startup')
     },
-    storage: {
-      local: {
-        get: async () => ({ stashedItems: clone(items) }),
-        set: async value => {
-          items = clone(value.stashedItems);
-        }
-      }
+    storage,
+    windows: {
+      getAll: async () => clone(windows.filter(w => w.type === 'normal')),
+      onCreated: eventSlot(listeners, 'windowCreated')
     },
     action: {
       onClicked: eventSlot(listeners, 'actionClicked')
@@ -73,8 +114,8 @@ function runBackground(options = {}) {
         if (query.highlighted) return clone(options.highlightedTabs ?? []);
         if (query.groupId === 7) return clone(options.groupedTabs ?? []);
         if (query.groupId === -1) return clone(options.looseTabs ?? []);
-        if (query.windowId !== undefined) return clone(options.windowTabs ?? []);
-        return [];
+        if (query.windowId !== undefined) return clone((options.windowTabs ?? []).filter(tab => tab.windowId === undefined || tab.windowId === query.windowId));
+        return clone(options.windowTabs ?? []);
       },
       create: async details => {
         const tab = { id: 100 + createdTabs.length, ...clone(details) };
@@ -94,7 +135,7 @@ function runBackground(options = {}) {
 
   const context = vm.createContext({
     chrome: api,
-    console,
+    console: { error: (...args) => errors.push(args) },
     crypto: { randomUUID: () => 'stash-id' },
     navigator: {
       locks: {
@@ -111,8 +152,11 @@ function runBackground(options = {}) {
     updatedTabs,
     removedTabs,
     contextMenus,
+    errors,
     permissionRequests,
-    getItems: () => clone(items)
+    windows,
+    sessionStorage,
+    getItems: () => storage.snapshot().stashedItems
   };
 }
 
@@ -140,8 +184,8 @@ function createElement(initialClasses = []) {
       await Promise.all((listeners.get(type) ?? []).map(listener => listener({ type, target: this, ...event })));
     },
     setAttribute() {},
-    focus() {},
-    showModal() {},
+    focus() { this.focused = true; },
+    showModal() { this.open = true; },
     popoverOpen: false,
     showPopover() { this.popoverOpen = true; },
     hidePopover() { this.popoverOpen = false; },
@@ -169,16 +213,16 @@ function createElement(initialClasses = []) {
 }
 
 function runManager(initialItems, options = {}) {
-  const listeners = {};
   const documentListeners = {};
   const createdTabs = [];
   const errors = [];
   const groupedTabs = [];
   const updatedGroups = [];
-  let items = clone(initialItems);
+  const discardedTabs = [];
+  const tabEvents = [];
+  const storage = options.storage ?? createStorage({ stashedItems: initialItems, ...options.preferences }, options);
   let nextTabId = 20;
   let nextImportId = 1;
-  let storageSetCalls = 0;
   const elements = new Map();
   const timers = new Map();
   let time = 0;
@@ -188,19 +232,7 @@ function runManager(initialItems, options = {}) {
     runtime: {
       getURL: path => `chrome-extension://stasher/${path}`
     },
-    storage: {
-      local: {
-        get: async () => ({ stashedItems: clone(items) }),
-        set: async value => {
-          storageSetCalls += 1;
-          if (storageSetCalls === options.failStorageSetAt) {
-            throw new Error('Storage update failed');
-          }
-          items = clone(value.stashedItems);
-        }
-      },
-      onChanged: eventSlot(listeners, 'storageChanged')
-    },
+    storage,
     permissions: {
       contains: async () => options.groupPermissionGranted !== false
     },
@@ -209,16 +241,29 @@ function runManager(initialItems, options = {}) {
         if (options.failTabCreation) throw new Error('Tab creation failed');
         const tab = { id: nextTabId++, ...clone(details) };
         createdTabs.push(tab);
+        tabEvents.push(['create', tab.id]);
         return tab;
+      },
+      discard: async id => {
+        discardedTabs.push(id);
+        tabEvents.push(['discard', id]);
+        if (options.failTabDiscard === true || options.failTabDiscard === id) throw new Error('Tab discard failed');
+        if (options.emptyTabDiscard) return undefined;
+        const tab = createdTabs.find(tab => tab.id === id);
+        assert.equal(tab.active, false, 'Only background tabs may be discarded');
+        tab.discarded = true;
+        return clone(tab);
       },
       group: async details => {
         if (options.failTabGrouping) throw new Error('Tab grouping failed');
         groupedTabs.push(clone(details));
+        tabEvents.push(['group', ...details.tabIds]);
         return 8;
       }
     },
     tabGroups: {
       update: async (id, details) => {
+        if (options.failGroupUpdate) throw new Error('Group update failed');
         updatedGroups.push([id, clone(details)]);
       }
     }
@@ -275,6 +320,9 @@ function runManager(initialItems, options = {}) {
     errors,
     groupedTabs,
     updatedGroups,
+    discardedTabs,
+    tabEvents,
+    storage,
     async advanceTime(milliseconds) {
       const end = time + milliseconds;
       for (;;) {
@@ -289,7 +337,7 @@ function runManager(initialItems, options = {}) {
     },
     getElement: id => elements.get(id),
     triggerDocumentEvent: (name, event) => documentListeners[name](event),
-    getItems: () => clone(items)
+    getItems: () => storage.snapshot().stashedItems
   };
 }
 
@@ -325,6 +373,7 @@ test('stashes a tab group through the Chromium extension API', async () => {
   assert.deepEqual(result.createdTabs, [{
     id: 100,
     url: 'chrome-extension://stasher/src/manager/manager.html',
+    windowId: 4,
     index: 0,
     pinned: true,
     active: true
@@ -631,7 +680,7 @@ test('keeps a stash when restoration fails before cleanup', async () => {
     tabs: [{ title: 'One', url: 'https://one.example' }]
   };
 
-  for (const failure of ['failTabCreation', 'failTabGrouping']) {
+  for (const failure of ['failTabCreation', 'failTabGrouping', 'failGroupUpdate']) {
     const result = runManager([stash], { [failure]: true });
 
     await vm.runInContext(`restoreGroup(${JSON.stringify(stash)})`, result.context);
@@ -672,6 +721,278 @@ test('reports cleanup failure and retains the restored stash', async () => {
   assert.deepEqual(result.getItems(), [stash]);
   assert.equal(result.getElement('notification').popoverOpen, true);
   assert.match(result.getElement('notification-message').textContent, /kept to avoid data loss/i);
+});
+
+const preferenceKeys = ['openOnStartup', 'keepAfterRestore', 'editOnDoubleClick', 'unloadAfterRestore'];
+const settingsStash = {
+  id: 'settings-stash', type: 'group', title: 'Settings test', color: 'blue',
+  tabs: [{ title: 'One', url: 'https://one.example' }, { title: 'Two', url: 'https://two.example' }]
+};
+
+test('settings default off for missing or invalid values without writing defaults', async () => {
+  for (const preferences of [{}, Object.fromEntries(preferenceKeys.map(key => [key, 'true']))]) {
+    const result = runManager([settingsStash], { preferences });
+    await result.getElement('settingsBtn').onclick();
+    for (const key of preferenceKeys) {
+      assert.equal(result.getElement(key).checked, false);
+      assert.equal(result.getElement(key).disabled, false);
+    }
+    assert.deepEqual(result.storage.writes, []);
+    assert.deepEqual(result.getItems(), [settingsStash]);
+  }
+});
+
+test('each switch saves only its preference and survives reopening', async () => {
+  const result = runManager([settingsStash]);
+  await result.getElement('settingsBtn').onclick();
+  for (const key of preferenceKeys) {
+    const input = result.getElement(key);
+    input.checked = true;
+    await input.trigger('change');
+    assert.deepEqual(result.storage.writes.at(-1), { [key]: true });
+    assert.equal(input.disabled, false);
+  }
+  const reopened = runManager([], { storage: result.storage });
+  await reopened.getElement('settingsBtn').onclick();
+  for (const key of preferenceKeys) assert.equal(reopened.getElement(key).checked, true);
+  assert.deepEqual(reopened.getItems(), [settingsStash]);
+});
+
+test('a failed preference save reverts the switch and exposes an inline error', async () => {
+  const result = runManager([], { preferences: { keepAfterRestore: true }, failStorageSetAt: 1 });
+  await result.getElement('settingsBtn').onclick();
+  const input = result.getElement('keepAfterRestore');
+  input.checked = false;
+  await input.trigger('change');
+  assert.equal(input.checked, true);
+  assert.equal(input.disabled, false);
+  assert.equal(result.storage.snapshot().keepAfterRestore, true);
+  assert.equal(result.getElement('settings-error').hidden, false);
+  assert.match(result.getElement('settings-error').textContent, /previous value was restored/);
+  input.checked = false;
+  await input.trigger('change');
+  assert.equal(result.storage.snapshot().keepAfterRestore, false);
+  assert.equal(result.getElement('settings-error').hidden, true);
+});
+
+test('settings read failure leaves controls disabled and prevents restoration', async () => {
+  const result = runManager([settingsStash], { failPreferenceGet: true });
+  await result.getElement('settingsBtn').onclick();
+  for (const key of preferenceKeys) assert.equal(result.getElement(key).disabled, true);
+  assert.equal(result.getElement('settings-error').hidden, false);
+  await vm.runInContext(`restoreGroup(${JSON.stringify(settingsStash)})`, result.context);
+  assert.deepEqual(result.createdTabs, []);
+  assert.deepEqual(result.getItems(), [settingsStash]);
+});
+
+test('open settings dialogs synchronize independent preferences, including invalid values and removals', async () => {
+  const storage = createStorage({ stashedItems: [settingsStash] });
+  const first = runManager([], { storage });
+  const second = runManager([], { storage });
+  await Promise.all([first.getElement('settingsBtn').onclick(), second.getElement('settingsBtn').onclick()]);
+  first.getElement('keepAfterRestore').checked = true;
+  await first.getElement('keepAfterRestore').trigger('change');
+  assert.equal(second.getElement('keepAfterRestore').checked, true);
+  await storage.local.set({ keepAfterRestore: 'true', openOnStartup: true });
+  for (const result of [first, second]) {
+    assert.equal(result.getElement('keepAfterRestore').checked, false);
+    assert.equal(result.getElement('openOnStartup').checked, true);
+  }
+  await storage.local.remove('openOnStartup');
+  assert.equal(second.getElement('openOnStartup').checked, false);
+  assert.deepEqual(storage.snapshot().stashedItems, [settingsStash]);
+});
+
+test('closing settings restores focus to More actions', async () => {
+  const result = runManager([]);
+  await result.getElement('settings-modal').trigger('close');
+  assert.equal(result.getElement('moreBtn').focused, true);
+});
+
+test('settings reread after a preference changes while loading', async () => {
+  const result = runManager([]);
+  const get = result.storage.local.get;
+  let release;
+  let preferenceReads = 0;
+  result.storage.local.get = async query => {
+    const snapshot = await get(query);
+    if ('openOnStartup' in query && ++preferenceReads === 1) {
+      return new Promise(resolve => { release = () => resolve(snapshot); });
+    }
+    return snapshot;
+  };
+  const loading = result.getElement('settingsBtn').onclick();
+  await Promise.resolve();
+  await result.storage.local.set({ openOnStartup: true });
+  release();
+  await loading;
+  assert.equal(preferenceReads, 2);
+  assert.equal(result.getElement('openOnStartup').checked, true);
+});
+
+test('a pending save remains disabled after reopening and a late failure safely reverts it', async () => {
+  const result = runManager([]);
+  await result.getElement('settingsBtn').onclick();
+  let rejectSave;
+  result.storage.local.set = () => new Promise((_resolve, reject) => { rejectSave = reject; });
+  const input = result.getElement('keepAfterRestore');
+  input.checked = true;
+  const saving = input.trigger('change');
+  assert.equal(input.disabled, true);
+  await result.getElement('settingsBtn').onclick();
+  assert.equal(input.disabled, true);
+  rejectSave(new Error('Late failure'));
+  await saving;
+  assert.equal(input.disabled, false);
+  assert.equal(input.checked, false);
+  assert.equal(result.getElement('settings-error').hidden, false);
+});
+
+test('title double-click reads the current preference and focuses the existing editor', async () => {
+  const result = runManager([settingsStash]);
+  const header = createElement();
+  result.context.header = header;
+  result.context.stash = settingsStash;
+  vm.runInContext('renderViewMode(header, stash)', result.context);
+  await result.storage.local.set({ editOnDoubleClick: true });
+  await header.children.find(child => child.className.includes('group-badge')).trigger('dblclick');
+  const input = header.children[0].children[0];
+  assert.equal(input.className, 'edit-input');
+  assert.equal(input.value, settingsStash.title);
+  assert.equal(input.focused, true);
+  assert.deepEqual(result.createdTabs, []);
+  assert.deepEqual(result.getItems(), [settingsStash]);
+  await result.storage.local.set({ editOnDoubleClick: false });
+  vm.runInContext('renderViewMode(header, stash)', result.context);
+  await header.children.find(child => child.className.includes('group-badge')).trigger('dblclick');
+  assert.equal(result.createdTabs.length, 2);
+  assert.deepEqual(result.getItems(), []);
+});
+
+for (const keepAfterRestore of [false, true]) {
+  for (const unloadAfterRestore of [false, true]) {
+    test(`whole-stash restore honors keep=${keepAfterRestore}, unload=${unloadAfterRestore}`, async () => {
+      const result = runManager([settingsStash]);
+      await result.storage.local.set({ keepAfterRestore, unloadAfterRestore });
+      await vm.runInContext(`restoreGroup(${JSON.stringify(settingsStash)})`, result.context);
+      assert.deepEqual(result.getItems(), keepAfterRestore ? [settingsStash] : []);
+      assert.deepEqual(result.discardedTabs, unloadAfterRestore ? [20, 21] : []);
+      assert.deepEqual(result.groupedTabs, [{ tabIds: [20, 21] }]);
+      assert.deepEqual(result.updatedGroups, [[8, { title: settingsStash.title, color: 'blue', collapsed: false }]]);
+      if (unloadAfterRestore) {
+        for (const id of [20, 21]) {
+          assert.ok(result.tabEvents.findIndex(event => event[0] === 'discard' && event[1] === id) <
+            result.tabEvents.findIndex(event => event[0] === 'group'));
+        }
+      }
+    });
+  }
+}
+
+test('discard failures are nonfatal, preserve grouping and report loaded tabs with keep on or off', async () => {
+  for (const keepAfterRestore of [false, true]) {
+    for (const failure of [{ failTabDiscard: 20 }, { emptyTabDiscard: true }]) {
+      const result = runManager([settingsStash], { ...failure, preferences: { keepAfterRestore, unloadAfterRestore: true } });
+      await vm.runInContext(`restoreGroup(${JSON.stringify(settingsStash)})`, result.context);
+      assert.deepEqual(result.discardedTabs, [20, 21]);
+      assert.deepEqual(result.groupedTabs, [{ tabIds: [20, 21] }]);
+      assert.deepEqual(result.getItems(), keepAfterRestore ? [settingsStash] : []);
+      assert.match(result.getElement('notification-message').textContent, /Some tabs.*remain loaded/);
+    }
+  }
+});
+
+test('keep and unload preserve saved data when tab creation or grouping fails', async () => {
+  for (const failure of ['failTabCreation', 'failTabGrouping']) {
+    const result = runManager([settingsStash], { [failure]: true, preferences: { keepAfterRestore: true, unloadAfterRestore: true } });
+    await vm.runInContext(`restoreGroup(${JSON.stringify(settingsStash)})`, result.context);
+    assert.deepEqual(result.getItems(), [settingsStash]);
+    assert.match(result.getElement('notification-message').textContent, /kept/i);
+  }
+});
+
+test('startup stays off for absent, false and invalid preferences', async () => {
+  for (const preferences of [{}, { openOnStartup: false }, { openOnStartup: 'true' }]) {
+    const result = runBackground({ preferences, items: [settingsStash] });
+    await result.listeners.startup();
+    assert.deepEqual(result.createdTabs, []);
+    assert.deepEqual(result.updatedTabs, []);
+    assert.equal(result.listeners.windowCreated, undefined);
+    assert.deepEqual(result.getItems(), [settingsStash]);
+  }
+});
+
+test('startup opens one pinned background manager in a normal window without stashing', async () => {
+  const result = runBackground({ preferences: { openOnStartup: true }, items: [settingsStash], windows: [
+    { id: 9, type: 'popup', focused: true }, { id: 4, type: 'normal', focused: true }
+  ] });
+  await result.listeners.startup();
+  assert.deepEqual(result.createdTabs, [{ id: 100, url: 'chrome-extension://stasher/src/manager/manager.html', windowId: 4, index: 0, pinned: true, active: false }]);
+  assert.deepEqual(result.removedTabs, []);
+  assert.deepEqual(result.permissionRequests, []);
+  assert.deepEqual(result.getItems(), [settingsStash]);
+  assert.equal(result.listeners.windowCreated, undefined);
+});
+
+test('startup reuses existing or restoring manager tabs across normal windows without selecting them', async () => {
+  for (const urlKey of ['url', 'pendingUrl']) {
+    const result = runBackground({ preferences: { openOnStartup: true }, windows: [
+      { id: 4, type: 'normal', focused: true }, { id: 8, type: 'normal' }
+    ], windowTabs: [{ id: 55, windowId: 8, [urlKey]: 'chrome-extension://stasher/src/manager/manager.html' }] });
+    await result.listeners.startup();
+    assert.deepEqual(result.createdTabs, []);
+    assert.deepEqual(result.updatedTabs, [{ id: 55, pinned: true }]);
+  }
+});
+
+test('startup waits once for a normal window and ignores popup and incognito windows', async () => {
+  const result = runBackground({ preferences: { openOnStartup: true }, windows: [] });
+  await result.listeners.startup();
+  assert.deepEqual(result.createdTabs, []);
+  const onCreated = result.listeners.windowCreated;
+  await onCreated({ id: 9, type: 'popup' });
+  await onCreated({ id: 10, type: 'normal', incognito: true });
+  assert.deepEqual(result.createdTabs, []);
+  result.windows.push({ id: 11, type: 'normal' });
+  await Promise.all([onCreated({ id: 11, type: 'normal' }), onCreated({ id: 12, type: 'normal' })]);
+  assert.equal(result.createdTabs.length, 1);
+  assert.equal(result.createdTabs[0].windowId, 11);
+  assert.equal(result.createdTabs[0].active, false);
+  assert.equal(result.listeners.windowCreated, undefined);
+});
+
+test('startup ignores managers in incognito windows', async () => {
+  const result = runBackground({ preferences: { openOnStartup: true }, windows: [
+    { id: 4, type: 'normal', focused: true }, { id: 9, type: 'normal', incognito: true }
+  ], windowTabs: [{ id: 55, windowId: 9, url: 'chrome-extension://stasher/src/manager/manager.html' }] });
+  await result.listeners.startup();
+  assert.equal(result.createdTabs.length, 1);
+  assert.equal(result.createdTabs[0].windowId, 4);
+  assert.deepEqual(result.updatedTabs, []);
+});
+
+test('startup does not open with an unreadable preference', async () => {
+  const result = runBackground({ preferences: { openOnStartup: true }, failPreferenceGet: true });
+  await result.listeners.startup();
+  assert.deepEqual(result.createdTabs, []);
+  assert.equal(result.errors.length, 1);
+});
+
+test('waiting for a startup window survives service-worker suspension and is consumed once', async () => {
+  const first = runBackground({ preferences: { openOnStartup: true }, windows: [] });
+  await first.listeners.startup();
+  assert.equal(first.sessionStorage.snapshot().awaitingStartupWindow, true);
+  const restarted = runBackground({ sessionStorage: first.sessionStorage, windows: [] });
+  const onCreated = restarted.listeners.windowCreated;
+  restarted.windows.push({ id: 4, type: 'normal' });
+  await onCreated({ id: 4, type: 'normal' });
+  assert.equal(restarted.createdTabs.length, 1);
+  assert.equal(restarted.createdTabs[0].active, false);
+  assert.equal(restarted.sessionStorage.snapshot().awaitingStartupWindow, undefined);
+  assert.equal(restarted.listeners.windowCreated, undefined);
+  const later = runBackground({ sessionStorage: restarted.sessionStorage });
+  await later.listeners.windowCreated({ id: 4, type: 'normal' });
+  assert.deepEqual(later.createdTabs, []);
 });
 
 test('search ranks stash titles, tab titles, and URLs while preserving tie order', () => {

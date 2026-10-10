@@ -19,25 +19,67 @@ const UNGROUPED_ID = -1;
 /**
  * Opens or focuses the Stasher manager tab.
  * @param {number} windowId - The ID of the window to open the manager in.
+ * @param {boolean} active - Whether to select the manager tab.
  */
-const openManager = async (windowId) => {
+const openManager = async (windowId, active = true) => {
   // Check if manager is already open in this window
   const tabs = await chrome.tabs.query({ windowId });
-  const managerTab = tabs.find(t => t.url === MANAGER_URL);
+  const managerTab = tabs.find(t => t.url === MANAGER_URL || t.pendingUrl === MANAGER_URL);
 
   if (managerTab) {
-    // If found, highlight it and ensure it's pinned
-    await chrome.tabs.update(managerTab.id, { active: true, pinned: true });
+    // Pin the existing manager, selecting it for manual actions.
+    await chrome.tabs.update(managerTab.id, { ...(active ? { active: true } : {}), pinned: true });
   } else {
     // If not found, create it pinned at index 0 (far left)
     await chrome.tabs.create({
       url: MANAGER_URL,
+      windowId,
       index: 0,
       pinned: true,
-      active: true
+      active
     });
   }
 };
+
+let openedOnStartup = false;
+const openStartupManager = async window => {
+  if (window.type !== 'normal' || window.incognito) return;
+  try {
+    const { awaitingStartupWindow } = await chrome.storage.session.get({ awaitingStartupWindow: false });
+    if (awaitingStartupWindow !== true || openedOnStartup) return;
+    openedOnStartup = true;
+    chrome.windows.onCreated.removeListener(openStartupManager);
+    await chrome.storage.session.remove('awaitingStartupWindow');
+    // Session-restored tabs may expose only pendingUrl while loading.
+    const windows = await chrome.windows.getAll({ windowTypes: ['normal'] });
+    const tabs = await chrome.tabs.query({});
+    const existing = tabs.find(tab =>
+      windows.some(w => w.id === tab.windowId && !w.incognito) &&
+      (tab.url === MANAGER_URL || tab.pendingUrl === MANAGER_URL));
+    if (existing) await chrome.tabs.update(existing.id, { pinned: true });
+    else await openManager(window.id, false);
+  } catch (error) {
+    console.error('Error opening Stasher on startup:', error);
+  }
+};
+
+// Register synchronously; session storage keeps the wait alive across worker suspension.
+chrome.windows.onCreated.addListener(openStartupManager);
+chrome.runtime.onStartup.addListener(async () => {
+  try {
+    const { openOnStartup } = await chrome.storage.local.get({ openOnStartup: false });
+    if (openOnStartup !== true) {
+      chrome.windows.onCreated.removeListener(openStartupManager);
+      return;
+    }
+    await chrome.storage.session.set({ awaitingStartupWindow: true });
+    const windows = await chrome.windows.getAll({ windowTypes: ['normal'] });
+    const window = windows.find(w => !w.incognito && w.focused) || windows.find(w => !w.incognito);
+    if (window) await openStartupManager(window);
+  } catch (error) {
+    console.error('Error reading startup preference:', error);
+  }
+});
 
 /**
  * Saves a stash item to local storage.

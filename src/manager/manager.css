@@ -558,6 +558,58 @@ button.secondary {
   border: 1px solid var(--overlay0);
 }
 
+.settings-row {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 16px 0;
+  border-top: 1px solid var(--border);
+  line-height: 1.5;
+}
+
+.settings-row > div { flex: 1; }
+.settings-row label { cursor: pointer; }
+.settings-row p {
+  margin: 4px 0 0;
+  color: var(--subtext0);
+  font-size: 12px;
+}
+
+.settings-switch {
+  appearance: none;
+  flex-shrink: 0;
+  width: 36px;
+  height: 22px;
+  margin: 0;
+  padding: 2px;
+  border: 1px solid var(--overlay0);
+  border-radius: 12px;
+  background: var(--surface0);
+  cursor: pointer;
+}
+
+.settings-switch::before {
+  content: '';
+  display: block;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: var(--subtext0);
+}
+
+.settings-switch:checked { background: var(--blue); border-color: var(--blue); }
+.settings-switch:checked::before {
+  transform: translateX(14px);
+  background: light-dark(#fff, var(--mantle));
+}
+.settings-switch:disabled { opacity: .5; cursor: wait; }
+#settings-error { color: var(--red); margin: 0 0 16px; line-height: 1.5; }
+
+@media (forced-colors: active) {
+  .settings-switch { appearance: auto; }
+  .settings-switch::before { display: none; }
+}
+
 button.filled {
   background: var(--button-color);
   color: light-dark(#ffffff, var(--mantle));

@@ -86,9 +86,10 @@
       <h2 id="import-title">Import tabs</h2>
       <p id="import-description" class="modal-description">Coming from OneTab, or another Stasher instance? Welcome!</p>
       <form method="dialog">
-        <p class="modal-description">Have a Stasher backup (.json)?<br><button value="file" class="secondary">Choose file</button></p>
+        <p class="modal-description"><strong>Importing from Stasher?</strong></p>
+        <p class="modal-description"><button value="file" class="secondary">Choose file</button></p>
       </form>
-      <label for="onetab-text">OneTab export</label>
+      <p class="modal-description"><label for="onetab-text"><strong>Importing from OneTab?</strong></label></p>
       <p id="onetab-instructions" class="modal-description">In OneTab's <strong>Import &amp; Export</strong> page, copy the text under <strong>Export URLs</strong>. Paste it below, keeping blank lines between groups, then click <strong>Import</strong>.</p>
       <textarea id="onetab-text" class="edit-input" rows="5" placeholder="https://example.com | Example page" aria-describedby="onetab-instructions import-note" spellcheck="false" autofocus></textarea>
       <p id="import-note" class="modal-description">Note: OneTab text exports omit group names and colors. If anything looks strange, <a href="https://github.com/taichikuji/Stasher/issues/new" target="_blank" rel="noopener noreferrer">report it here</a>.</p>

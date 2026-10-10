@@ -67,7 +67,7 @@
       <a class="icon-button" href="https://github.com/taichikuji/Stasher/wiki/How-to-use-Stasher" target="_blank" rel="noopener noreferrer" aria-label="How to use Stasher" title="How to use Stasher"><svg class="button-icon" aria-hidden="true"><use href="#icon-help"></use></svg></a>
       <button id="exportBtn" class="icon-button" type="button" aria-label="Export Stasher JSON backup" title="Export Stasher JSON backup"><svg class="button-icon" aria-hidden="true"><use href="#icon-export"></use></svg></button>
       <input type="file" id="importFile" accept=".json,.txt" class="visually-hidden" aria-label="Import Stasher JSON or OneTab text file">
-      <button id="importBtn" class="icon-button" type="button" aria-label="Import stashes or OneTab tabs" title="Import stashes or OneTab tabs"><svg class="button-icon" aria-hidden="true"><use href="#icon-import"></use></svg></button>
+      <button id="importBtn" class="icon-button" type="button" aria-label="Import" title="Import"><svg class="button-icon" aria-hidden="true"><use href="#icon-import"></use></svg></button>
       <button id="deleteAllBtn" class="icon-button danger" type="button" aria-label="Delete all" title="Delete ALL"><svg class="button-icon" aria-hidden="true"><use href="#icon-delete-stash"></use></svg></button>
     </div>
   </header>
@@ -86,15 +86,20 @@
     <button id="close-info-toast" class="icon-btn" type="button" aria-label="Dismiss notification">✕</button>
   </div>
 
-  <dialog id="import-modal" class="modal-overlay" aria-labelledby="import-title">
+  <dialog id="import-modal" class="modal-overlay" aria-labelledby="import-title" aria-describedby="import-description import-note">
     <div class="modal-box">
       <h2 id="import-title">Import tabs</h2>
-      <p id="onetab-instructions" class="modal-description">Choose a Stasher JSON backup or OneTab .txt file, or paste OneTab's <strong>Export / Import</strong> text below. Blank lines keep groups separate; group names and colors aren't included.</p>
-      <textarea id="onetab-text" class="edit-input" rows="5" placeholder="https://example.com | Example page" aria-label="OneTab export" aria-describedby="onetab-instructions" spellcheck="false" autofocus></textarea>
+      <p id="import-description" class="modal-description">Coming from another Stasher instance, or OneTab? Welcome!</p>
+      <form method="dialog">
+        <p class="modal-description">Have a Stasher backup (.json)? <button value="file" class="secondary">Choose file</button></p>
+      </form>
+      <label for="onetab-text">OneTab export</label>
+      <p id="onetab-instructions" class="modal-description">In OneTab's <strong>Import &amp; Export</strong> page, copy the text under <strong>Export URLs</strong>. Paste it below, keeping blank lines between groups, then click <strong>Import</strong>.</p>
+      <textarea id="onetab-text" class="edit-input" rows="5" placeholder="https://example.com | Example page" aria-describedby="onetab-instructions import-note" spellcheck="false" autofocus></textarea>
+      <p id="import-note" class="modal-description">Note: OneTab text exports omit group names and colors. If anything looks strange, <a href="https://github.com/taichikuji/Stasher/issues/new" target="_blank" rel="noopener noreferrer">report it here</a>.</p>
       <form method="dialog" class="modal-actions">
-        <button value="file" class="secondary">Choose file</button>
         <button value="cancel">Cancel</button>
-        <button value="confirm" class="primary">Import OneTab</button>
+        <button value="confirm" class="primary">Import</button>
       </form>
     </div>
   </dialog>

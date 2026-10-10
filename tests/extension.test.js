@@ -769,13 +769,12 @@ test('rejects Stasher JSON over the item limit', async () => {
   assert.match(result.getElement('info-msg').textContent, /too many stash items/i);
 });
 
-test('imports pasted OneTab groups, preserving order, titles, duplicate URLs, and existing stashes', async () => {
+test('imports OneTab groups from a file, preserving order, titles, duplicate URLs, and existing stashes', async () => {
   const existing = { id: 'existing', tabs: [{ title: 'Saved', url: 'https://saved.example' }] };
   const result = runManager([existing]);
-  vm.runInContext("showModal = async () => 'confirm'", result.context);
-  result.getElement('onetab-text').value = '\uFEFF\r\nhttps://one.example | First | with pipe\r\nhttps://one.example | Duplicate URL\r\n \t\r\n\r\nhttps://two.example\r\nchrome-extension://other/page.html | Extension\r\n';
+  result.getElement('importFile').files = [new File(['\uFEFF\r\nhttps://one.example | First | with pipe\r\nhttps://one.example | Duplicate URL\r\n \t\r\n\r\nhttps://two.example\r\nchrome-extension://other/page.html | Extension\r\n'], 'onetab.txt')];
 
-  await result.getElement('importBtn').onclick();
+  await result.getElement('importFile').onchange();
 
   const [first, second, saved] = result.getItems();
   assert.deepEqual(saved, existing);
@@ -793,7 +792,7 @@ test('imports pasted OneTab groups, preserving order, titles, duplicate URLs, an
     { title: 'https://two.example', url: 'https://two.example' },
     { title: 'Extension', url: 'chrome-extension://other/page.html' }
   ]);
-  assert.equal(result.getElement('onetab-text').value, '');
+  assert.equal(result.getElement('importFile').value, '');
   assert.equal(result.getElement('importBtn').disabled, false);
   assert.match(result.getElement('info-msg').textContent, /Imported 2 new stashes/);
 
@@ -806,10 +805,34 @@ test('imports pasted OneTab groups, preserving order, titles, duplicate URLs, an
   assert.equal(result.getItems().length, 2);
 });
 
+test('imports pasted OneTab exports through the shared import handler', async () => {
+  const existing = { id: 'kept', tabs: [{ title: 'Saved', url: 'https://saved.example' }] };
+  const result = runManager([existing]);
+  const text = 'https://one.example | One\nhttps://two.example | Two\n\nhttps://three.example | Three';
+  result.getElement('onetab-text').value = text;
+  vm.runInContext("showModal = async () => 'cancel'", result.context);
+  await result.getElement('importBtn').onclick();
+  assert.equal(result.getElement('onetab-text').value, text);
+  assert.deepEqual(result.getItems(), [existing]);
+
+  vm.runInContext("showModal = async () => 'confirm'", result.context);
+  await result.getElement('importBtn').onclick();
+
+  const [first, second, kept] = result.getItems();
+  assert.deepEqual(first.tabs.map(tab => tab.url), ['https://one.example', 'https://two.example']);
+  assert.deepEqual(second.tabs.map(tab => tab.url), ['https://three.example']);
+  assert.deepEqual(kept, existing);
+  assert.equal(result.getElement('onetab-text').value, '');
+  assert.match(result.getElement('info-msg').textContent, /Imported 2 new stashes/);
+});
+
 test('imports OneTab text files through the file picker and resets it', async () => {
   const result = runManager([]);
   let picked = false;
   result.getElement('importFile').click = () => { picked = true; };
+  vm.runInContext("showModal = async () => 'cancel'", result.context);
+  await result.getElement('importBtn').onclick();
+  assert.equal(picked, false);
   vm.runInContext("showModal = async () => 'file'", result.context);
   await result.getElement('importBtn').onclick();
   assert.equal(picked, true);
@@ -865,7 +888,7 @@ test('enforces OneTab import size and group limits without saving partial data',
   assert.equal(result.getItems()[0].tabs[0].title.length, 200);
 });
 
-test('failed OneTab save keeps existing stashes and pasted text available for retry', async () => {
+test('failed OneTab paste import preserves existing stashes and text for retry', async () => {
   const existing = { id: 'kept', tabs: [] };
   const result = runManager([existing], { failStorageSetAt: 1 });
   const text = 'https://one.example | One';
@@ -876,6 +899,7 @@ test('failed OneTab save keeps existing stashes and pasted text available for re
 
   assert.deepEqual(result.getItems(), [existing]);
   assert.equal(result.getElement('onetab-text').value, text);
+  assert.equal(result.getElement('importBtn').disabled, false);
   assert.match(result.getElement('info-msg').textContent, /Import failed: Storage update failed/);
 
   await result.getElement('importBtn').onclick();

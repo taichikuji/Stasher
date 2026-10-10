@@ -11,14 +11,18 @@
   overflow: hidden;
 }
 
+.button-icon,
+.search-icon {
+  fill: none;
+  stroke-width: 2;
+  stroke-linecap: round;
+}
+
 .button-icon {
   width: 1em;
   height: 1em;
   margin-right: 6px;
-  fill: none;
   stroke: currentColor;
-  stroke-width: 2;
-  stroke-linecap: round;
   stroke-linejoin: round;
   vertical-align: -0.125em;
 }
@@ -53,6 +57,10 @@ body {
   padding: 20px;
   color: var(--text);
   transition: background-color 0.3s, color 0.3s;
+}
+
+a {
+  color: var(--blue);
 }
 
 :focus-visible {
@@ -95,35 +103,44 @@ body {
   color: var(--text);
 }
 
-.empty-state {
-  text-align: center;
-  padding: 20px;
-  color: var(--subtext0);
-}
-
+.empty-state,
 .error-state {
   text-align: center;
   padding: 20px;
-  color: var(--red);
 }
 
-.header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
+.empty-state { color: var(--subtext0); }
+.error-state { color: var(--red); }
+
+.header,
+.stash-card {
   margin-bottom: 20px;
   border: 1px solid var(--border);
   background: var(--surface);
-  min-height: 34px;
-  padding: 15px 20px;
   border-radius: 6px;
   box-shadow: 0 1px 3px var(--shadow);
+}
+
+.header,
+.brand,
+.header-actions,
+.card-header,
+.group-badge,
+.link-item,
+.edit-container,
+.undo-toast {
+  display: flex;
+  align-items: center;
+}
+
+.header {
+  justify-content: space-between;
+  min-height: 34px;
+  padding: 15px 20px;
   transition: background-color 0.3s, box-shadow 0.3s;
 }
 
 .brand {
-  display: flex;
-  align-items: center;
   gap: 10px;
 }
 
@@ -132,20 +149,10 @@ body {
   height: 28px;
 }
 
-.brand h1,
-.brand p {
-  margin: 0;
-}
-
 .brand h1 {
+  margin: 0;
   font-size: 17px;
   line-height: 1.2;
-}
-
-.brand p {
-  margin-top: 2px;
-  color: var(--subtext0);
-  font-size: 11px;
 }
 
 .search-area {
@@ -155,14 +162,24 @@ body {
   margin: 0 24px;
 }
 
+.search-input,
+.edit-input {
+  border: 1px solid var(--overlay0);
+  border-radius: 5px;
+  background-color: var(--base);
+  color: var(--text);
+  font: inherit;
+}
+
 .search-input {
   width: 100%;
   padding: 8px 12px 8px 36px;
-  border: 1px solid var(--overlay0);
-  border-radius: 5px;
-  background: var(--base);
-  color: var(--text);
-  font: inherit;
+}
+
+.edit-input {
+  font-size: 14px;
+  padding: 6px 10px;
+  flex-grow: 1;
 }
 
 .search-icon {
@@ -173,10 +190,7 @@ body {
   width: 16px;
   height: 16px;
   transform: translateY(-50%);
-  fill: none;
   stroke: var(--subtext0);
-  stroke-width: 2;
-  stroke-linecap: round;
   pointer-events: none;
 }
 
@@ -204,13 +218,11 @@ button.primary { color: var(--blue); }
 button.primary:hover { background-color: color-mix(in srgb, var(--blue) 12%, transparent); }
 button.danger { color: var(--red); }
 button.danger:hover { background-color: color-mix(in srgb, var(--red) 12%, transparent); }
-.icon-only { padding: 8px; }
-.icon-only .button-icon { width: 18px; height: 18px; margin-right: 0; }
+.icon-only .button-icon,
+.header-actions .button-icon { width: 18px; height: 18px; margin-right: 0; }
 
 /* Header actions and cat easter egg */
 .header-actions {
-  display: flex;
-  align-items: center;
   flex-shrink: 0;
   gap: 4px;
 }
@@ -222,7 +234,6 @@ button.danger:hover { background-color: color-mix(in srgb, var(--red) 12%, trans
   height: 32px;
   padding: 0;
   margin: 0;
-  border-radius: 5px;
   color: var(--subtext0);
 }
 
@@ -233,12 +244,6 @@ button.danger:hover { background-color: color-mix(in srgb, var(--red) 12%, trans
 .header-actions .danger,
 .header-actions .danger:hover {
   color: var(--red);
-}
-
-.header-actions .button-icon {
-  width: 18px;
-  height: 18px;
-  margin-right: 0;
 }
 
 #catBtn { font-size: 18px; }
@@ -258,12 +263,6 @@ button.danger:hover { background-color: color-mix(in srgb, var(--red) 12%, trans
 }
 
 .stash-card {
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  background: var(--surface);
-  padding: 0;
-  margin-bottom: 20px;
-  box-shadow: 0 1px 3px var(--shadow);
   overflow: hidden;
   transition: background-color 0.3s;
 }
@@ -281,22 +280,16 @@ button.danger:hover { background-color: color-mix(in srgb, var(--red) 12%, trans
 }
 
 .collapse-btn {
-  font-size: 12px;
   margin-right: 4px;
-  margin-left: 0;
 }
 
 .card-header {
   padding: 12px 20px;
-  display: flex;
   justify-content: space-between;
-  align-items: center;
   border-bottom: 1px solid var(--surface1);
 }
 
 .group-badge {
-  display: flex;
-  align-items: center;
   margin: 0;
   padding: 4px 12px;
   border-radius: 16px;
@@ -323,7 +316,6 @@ button.danger:hover { background-color: color-mix(in srgb, var(--red) 12%, trans
 
 .card-actions button {
   font-size: 12px;
-  padding: 8px;
 }
 
 .meta-info {
@@ -340,8 +332,6 @@ button.danger:hover { background-color: color-mix(in srgb, var(--red) 12%, trans
 }
 
 .link-item {
-  display: flex;
-  align-items: center;
   padding: 6px 0;
   border-bottom: 1px solid var(--surface1);
 }
@@ -388,11 +378,6 @@ button.danger:hover { background-color: color-mix(in srgb, var(--red) 12%, trans
   opacity: 0;
   transition: opacity 0.15s;
 }
-.remove-tab-btn {
-  color: var(--red);
-  font-size: 12px;
-  margin-left: 4px;
-}
 .link-item:hover .remove-tab-btn,
 .remove-tab-btn:focus-visible,
 .card-header:hover .edit-btn,
@@ -403,21 +388,8 @@ button.danger:hover { background-color: color-mix(in srgb, var(--red) 12%, trans
 .icon-btn.remove-tab-btn:hover { background-color: color-mix(in srgb, var(--red) 12%, transparent); color: var(--red); }
 
 .edit-container {
-  display: flex;
-  align-items: center;
   gap: 10px;
   flex-grow: 1;
-}
-
-.edit-input {
-  font-size: 14px;
-  padding: 6px 10px;
-  border: 1px solid var(--overlay0);
-  border-radius: 5px;
-  flex-grow: 1;
-  font-family: inherit;
-  background-color: var(--base);
-  color: var(--text);
 }
 
 /* Native radios keep arrow-key selection and checked state without custom JavaScript. */
@@ -443,24 +415,19 @@ button.danger:hover { background-color: color-mix(in srgb, var(--red) 12%, trans
   margin-left: 0;
 }
 
-.color-dot:hover { background-color: var(--group-color); transform: scale(1.1); }
+.color-dot:hover { transform: scale(1.1); }
 .color-dot:checked {
   border-color: var(--text);
   transform: scale(1.1);
 }
-.color-dot:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px; }
 
 /* Edit/Save/Cancel Buttons */
 .icon-btn {
-  background: none;
-  border: none;
-  cursor: pointer;
   font-size: 16px;
   padding: 4px;
-  color: var(--text);
   margin-left: 5px;
 }
-.icon-btn.icon-only { padding: 8px; }
+.icon-only { padding: 8px; }
 .icon-btn:hover { color: var(--blue); background-color: var(--surface1); }
 
 .save-btn { color: var(--green); }
@@ -475,8 +442,6 @@ button.danger:hover { background-color: color-mix(in srgb, var(--red) 12%, trans
   color: var(--text);
   padding: 12px 24px;
   border-radius: 7px;
-  display: flex;
-  align-items: center;
   gap: 15px;
   box-shadow: 0 4px 12px var(--shadow);
   z-index: 1000;
@@ -497,17 +462,10 @@ button.danger:hover { background-color: color-mix(in srgb, var(--red) 12%, trans
   bottom: 84px;
 }
 
-#info-toast.hidden {
-  transform: translate(-50%, 20px);
-}
-
 /* Undo Button */
 #undo-btn {
-  background: none;
-  border: none;
   color: light-dark(var(--text), var(--blue));
   font-weight: bold;
-  cursor: pointer;
   padding: 4px 8px;
   margin: 0;
   text-transform: uppercase;
@@ -539,7 +497,6 @@ button.danger:hover { background-color: color-mix(in srgb, var(--red) 12%, trans
 
 .modal-box {
   background: var(--surface);
-  color: var(--text);
   padding: 24px;
 }
 
@@ -569,20 +526,20 @@ button.danger:hover { background-color: color-mix(in srgb, var(--red) 12%, trans
   font-size: 14px;
 }
 
-.modal-box button.secondary {
+button.secondary {
   border: 1px solid var(--overlay0);
 }
 
-.modal-box button.danger.filled {
+button.danger.filled {
   background: var(--red);
   color: light-dark(#ffffff, var(--mantle));
 }
 
-.modal-box button.danger.filled:hover {
+button.danger.filled:hover {
   background: color-mix(in srgb, var(--red) 85%, var(--text));
 }
 
-.modal-box textarea {
+textarea {
   display: block;
   width: 100%;
   resize: vertical;
@@ -598,10 +555,6 @@ button.danger:hover { background-color: color-mix(in srgb, var(--red) 12%, trans
   .header {
     flex-wrap: wrap;
     gap: 12px;
-  }
-
-  .brand p {
-    display: none;
   }
 
   .search-area {

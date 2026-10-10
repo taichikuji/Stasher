@@ -65,9 +65,9 @@
     <div class="header-actions" role="group" aria-label="Stash actions">
       <button id="catBtn" class="icon-button" type="button" aria-label="Pet" title="Pet">🐈</button>
       <a class="icon-button" href="https://github.com/taichikuji/Stasher/wiki/How-to-use-Stasher" target="_blank" rel="noopener noreferrer" aria-label="How to use Stasher" title="How to use Stasher"><svg class="button-icon" aria-hidden="true"><use href="#icon-help"></use></svg></a>
-      <button id="exportBtn" class="icon-button" type="button" aria-label="Export" title="Export"><svg class="button-icon" aria-hidden="true"><use href="#icon-export"></use></svg></button>
-      <input type="file" id="importFile" accept=".json" class="visually-hidden">
-      <button id="importBtn" class="icon-button" type="button" aria-label="Import" title="Import"><svg class="button-icon" aria-hidden="true"><use href="#icon-import"></use></svg></button>
+      <button id="exportBtn" class="icon-button" type="button" aria-label="Export Stasher JSON backup" title="Export Stasher JSON backup"><svg class="button-icon" aria-hidden="true"><use href="#icon-export"></use></svg></button>
+      <input type="file" id="importFile" accept=".json,.txt" class="visually-hidden" aria-label="Import Stasher JSON or OneTab text file">
+      <button id="importBtn" class="icon-button" type="button" aria-label="Import stashes or OneTab tabs" title="Import stashes or OneTab tabs"><svg class="button-icon" aria-hidden="true"><use href="#icon-import"></use></svg></button>
       <button id="deleteAllBtn" class="icon-button danger" type="button" aria-label="Delete all" title="Delete ALL"><svg class="button-icon" aria-hidden="true"><use href="#icon-delete-stash"></use></svg></button>
     </div>
   </header>
@@ -86,12 +86,26 @@
     <button id="close-info-toast" class="icon-btn" type="button" aria-label="Dismiss notification">✕</button>
   </div>
 
-  <dialog id="confirm-modal" class="modal-overlay" aria-labelledby="confirm-title">
+  <dialog id="import-modal" class="modal-overlay" aria-labelledby="import-title">
     <div class="modal-box">
-      <h2 id="confirm-title"></h2>
+      <h2 id="import-title">Import tabs</h2>
+      <p id="onetab-instructions" class="modal-description">Choose a Stasher JSON backup or OneTab .txt file, or paste OneTab's <strong>Export / Import</strong> text below. Blank lines keep groups separate; group names and colors aren't included.</p>
+      <textarea id="onetab-text" class="edit-input" rows="5" placeholder="https://example.com | Example page" aria-label="OneTab export" aria-describedby="onetab-instructions" spellcheck="false" autofocus></textarea>
       <form method="dialog" class="modal-actions">
+        <button value="file" class="secondary">Choose file</button>
         <button value="cancel">Cancel</button>
-        <button value="confirm" class="danger"><svg class="button-icon" aria-hidden="true"><use href="#icon-delete-stash"></use></svg>Delete All Stashes</button>
+        <button value="confirm" class="primary">Import OneTab</button>
+      </form>
+    </div>
+  </dialog>
+
+  <dialog id="confirm-modal" class="modal-overlay" aria-labelledby="confirm-title" aria-describedby="confirm-description">
+    <div class="modal-box">
+      <h2 id="confirm-title">Delete all stashes?</h2>
+      <p id="confirm-description" class="modal-description">All saved tabs and groups will be permanently deleted. This cannot be undone.</p>
+      <form method="dialog" class="modal-actions">
+        <button value="cancel" class="secondary" autofocus>Cancel</button>
+        <button value="confirm" class="danger filled"><svg class="button-icon" aria-hidden="true"><use href="#icon-delete-stash"></use></svg>Delete all stashes</button>
       </form>
     </div>
   </dialog>

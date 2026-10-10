@@ -174,6 +174,7 @@ function runManager(initialItems, options = {}) {
   const updatedGroups = [];
   let items = clone(initialItems);
   let nextTabId = 20;
+  let nextImportId = 1;
   let storageSetCalls = 0;
   const elements = new Map();
 
@@ -236,9 +237,11 @@ function runManager(initialItems, options = {}) {
   const context = vm.createContext({
     chrome: api,
     Blob,
+    File,
     URL,
     clearTimeout() {},
     console: { error: (...args) => errors.push(args) },
+    crypto: { randomUUID: () => `import-id-${nextImportId++}` },
     document,
     navigator: {
       locks: {
@@ -737,7 +740,7 @@ test('imports compatible Stasher JSON while de-duplicating stash IDs', async () 
     }
   };
 
-  await vm.runInContext('handleImport(importEvent)', result.context);
+  await vm.runInContext('handleImport(importEvent.target.files[0])', result.context);
 
   assert.equal(result.getItems().length, 2);
   assert.equal(result.getItems().filter(item => item.id === 'same-id').length, 1);
@@ -761,9 +764,172 @@ test('rejects Stasher JSON over the item limit', async () => {
     }
   };
 
-  await vm.runInContext('handleImport(importEvent)', result.context);
+  await vm.runInContext('handleImport(importEvent.target.files[0])', result.context);
 
   assert.match(result.getElement('info-msg').textContent, /too many stash items/i);
+});
+
+test('imports pasted OneTab groups, preserving order, titles, duplicate URLs, and existing stashes', async () => {
+  const existing = { id: 'existing', tabs: [{ title: 'Saved', url: 'https://saved.example' }] };
+  const result = runManager([existing]);
+  vm.runInContext("showModal = async () => 'confirm'", result.context);
+  result.getElement('onetab-text').value = '\uFEFF\r\nhttps://one.example | First | with pipe\r\nhttps://one.example | Duplicate URL\r\n \t\r\n\r\nhttps://two.example\r\nchrome-extension://other/page.html | Extension\r\n';
+
+  await result.getElement('importBtn').onclick();
+
+  const [first, second, saved] = result.getItems();
+  assert.deepEqual(saved, existing);
+  assert.notEqual(first.id, second.id);
+  assert.equal(first.title, 'OneTab group 1');
+  assert.equal(second.title, 'OneTab group 2');
+  assert.equal(first.type, 'group');
+  assert.equal(first.color, 'grey');
+  assert.ok(Number.isFinite(Date.parse(first.timestamp)));
+  assert.deepEqual(first.tabs, [
+    { title: 'First | with pipe', url: 'https://one.example' },
+    { title: 'Duplicate URL', url: 'https://one.example' }
+  ]);
+  assert.deepEqual(second.tabs, [
+    { title: 'https://two.example', url: 'https://two.example' },
+    { title: 'Extension', url: 'chrome-extension://other/page.html' }
+  ]);
+  assert.equal(result.getElement('onetab-text').value, '');
+  assert.equal(result.getElement('importBtn').disabled, false);
+  assert.match(result.getElement('info-msg').textContent, /Imported 2 new stashes/);
+
+  // Imported groups remain compatible with Stasher's backup and restore paths.
+  result.context.importedGroup = first;
+  assert.equal(vm.runInContext('isValidStashItem(importedGroup)', result.context), true);
+  await vm.runInContext('restoreGroup(importedGroup)', result.context);
+  assert.deepEqual(result.groupedTabs, [{ tabIds: [20, 21] }]);
+  assert.equal(result.updatedGroups[0][1].title, 'OneTab group 1');
+  assert.equal(result.getItems().length, 2);
+});
+
+test('imports OneTab text files through the file picker and resets it', async () => {
+  const result = runManager([]);
+  let picked = false;
+  result.getElement('importFile').click = () => { picked = true; };
+  vm.runInContext("showModal = async () => 'file'", result.context);
+  await result.getElement('importBtn').onclick();
+  assert.equal(picked, true);
+  Object.assign(result.getElement('importFile'), {
+    files: [{ name: 'OneTab.TXT', size: 200, text: async () => 'http://one.example | One\n\nhttps://two.example | ' }],
+    value: 'OneTab.TXT'
+  });
+
+  await result.getElement('importFile').onchange();
+
+  assert.equal(result.getItems().length, 2);
+  assert.equal(result.getItems()[1].tabs[0].title, 'https://two.example');
+  assert.equal(result.getElement('importFile').value, '');
+});
+
+test('rejects malformed or unsupported OneTab lines before saving any groups', async () => {
+  const existing = { id: 'kept', tabs: [{ title: 'Saved', url: 'https://saved.example' }] };
+  for (const invalid of ['javascript:alert(1) | Unsafe', 'file:///tmp/private | Local', 'chrome://settings | Settings', 'Not an exported URL', 'https://valid.example trailing text']) {
+    const result = runManager([existing]);
+    const text = `https://one.example | Valid\n\n${invalid}`;
+    result.getElement('onetab-text').value = text;
+    vm.runInContext("showModal = async () => 'confirm'", result.context);
+
+    await result.getElement('importBtn').onclick();
+
+    assert.deepEqual(result.getItems(), [existing]);
+    assert.equal(result.getElement('onetab-text').value, text);
+    assert.match(result.getElement('info-msg').textContent, /Nothing was imported/);
+    assert.equal(result.getElement('importBtn').disabled, false);
+  }
+});
+
+test('enforces OneTab import size and group limits without saving partial data', async () => {
+  const cases = [
+    ['\n \t\r\n', /No tabs found/],
+    ['https://one.example | ' + '\u00e9'.repeat(524288), /too large/],
+    [Array(1001).fill('https://one.example').join('\n\n'), /too many stash items/],
+    [Array(501).fill('https://one.example').join('\n'), /exceeds 500 tabs/]
+  ];
+  for (const [text, message] of cases) {
+    const result = runManager([]);
+    result.context.oneTabFile = new File([text], 'onetab.txt');
+
+    await vm.runInContext('handleImport(oneTabFile)', result.context);
+
+    assert.match(result.getElement('info-msg').textContent, message);
+    assert.deepEqual(result.getItems(), []);
+  }
+  const result = runManager([]);
+  result.context.oneTabFile = new File([Array(500).fill('https://one.example | ' + 'T'.repeat(201)).join('\n')], 'onetab.txt');
+  await vm.runInContext('handleImport(oneTabFile)', result.context);
+  assert.equal(result.getItems()[0].tabs.length, 500);
+  assert.equal(result.getItems()[0].tabs[0].title.length, 200);
+});
+
+test('failed OneTab save keeps existing stashes and pasted text available for retry', async () => {
+  const existing = { id: 'kept', tabs: [] };
+  const result = runManager([existing], { failStorageSetAt: 1 });
+  const text = 'https://one.example | One';
+  result.getElement('onetab-text').value = text;
+  vm.runInContext("showModal = async () => 'confirm'", result.context);
+
+  await result.getElement('importBtn').onclick();
+
+  assert.deepEqual(result.getItems(), [existing]);
+  assert.equal(result.getElement('onetab-text').value, text);
+  assert.match(result.getElement('info-msg').textContent, /Import failed: Storage update failed/);
+
+  await result.getElement('importBtn').onclick();
+  assert.equal(result.getItems().length, 2);
+  assert.equal(result.getElement('onetab-text').value, '');
+});
+
+test('repeated OneTab import submissions only save once while a write is pending', async () => {
+  const result = runManager([]);
+  result.context.oneTabFile = new File(['https://one.example | One'], 'onetab.txt');
+
+  await Promise.all([
+    vm.runInContext('handleImport(oneTabFile)', result.context),
+    vm.runInContext('handleImport(oneTabFile)', result.context)
+  ]);
+
+  assert.equal(result.getItems().length, 1);
+});
+
+test('exports only a Stasher JSON backup after importing OneTab tabs', async () => {
+  const result = runManager([]);
+  result.context.oneTabFile = new File(['https://one.example | One'], 'onetab.txt');
+  await vm.runInContext('handleImport(oneTabFile)', result.context);
+  let download;
+  result.context.document.createElement = () => {
+    const anchor = createElement();
+    anchor.click = () => { download = anchor; };
+    return anchor;
+  };
+
+  await vm.runInContext('handleExport()', result.context);
+
+  assert.match(download.download, /^stasher-export-\d{4}-\d{2}-\d{2}\.json$/);
+  const backup = await fetch(download.href);
+  assert.equal(backup.headers.get('content-type').split(';')[0], 'application/json');
+  assert.deepEqual(await backup.json(), result.getItems());
+  URL.revokeObjectURL(download.href);
+});
+
+test('cancelling Delete All keeps storage and pending Undo', async () => {
+  const first = { id: 'first', tabs: [] };
+  const second = { id: 'second', tabs: [] };
+  const result = runManager([first, second]);
+  await vm.runInContext("deleteStash('first')", result.context);
+  const deletion = vm.runInContext('handleDeleteAll()', result.context);
+  const dialog = result.getElement('confirm-modal');
+
+  assert.equal(dialog.returnValue, 'cancel');
+  await dialog.trigger('close');
+  await deletion;
+
+  assert.deepEqual(result.getItems(), [second]);
+  await vm.runInContext('handleUndo()', result.context);
+  assert.deepEqual(result.getItems(), [first, second]);
 });
 
 test('Delete All clears storage and pending Undo', async () => {
@@ -780,7 +946,7 @@ test('Delete All clears storage and pending Undo', async () => {
   const result = runManager([deleted, remaining]);
 
   await vm.runInContext("deleteStash('deleted-first')", result.context);
-  vm.runInContext('showConfirmModal = async () => true', result.context);
+  vm.runInContext("showModal = async () => 'confirm'", result.context);
   await vm.runInContext('handleDeleteAll()', result.context);
 
   assert.deepEqual(result.getItems(), []);
@@ -805,7 +971,7 @@ test('failed Delete All preserves storage and pending Undo', async () => {
   const result = runManager([deleted, remaining], { failStorageSetAt: 2 });
 
   await vm.runInContext("deleteStash('deleted-first')", result.context);
-  vm.runInContext('showConfirmModal = async () => true', result.context);
+  vm.runInContext("showModal = async () => 'confirm'", result.context);
   await assert.rejects(vm.runInContext('handleDeleteAll()', result.context));
 
   assert.deepEqual(result.getItems(), [remaining]);

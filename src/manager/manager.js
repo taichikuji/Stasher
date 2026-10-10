@@ -65,9 +65,10 @@ const elements = {
   exportBtn: document.getElementById('exportBtn'),
   importBtn: document.getElementById('importBtn'),
   importFile: document.getElementById('importFile'),
+  importModal: document.getElementById('import-modal'),
+  oneTabText: document.getElementById('onetab-text'),
   searchInput: document.getElementById('searchInput'),
-  confirmModal: document.getElementById('confirm-modal'),
-  confirmTitle: document.getElementById('confirm-title')
+  confirmModal: document.getElementById('confirm-modal')
 };
 
 const iconMarkup = (name) =>
@@ -582,15 +583,14 @@ function hideInfoToast() {
   if (state.infoTimeout) clearTimeout(state.infoTimeout);
 }
 
-// Confirm Modal
-function showConfirmModal(message) {
+// Native dialogs share their close handling and return the chosen button value.
+function showModal(modal) {
   return new Promise((resolve) => {
-    elements.confirmTitle.textContent = message;
-    elements.confirmModal.returnValue = 'cancel';
-    elements.confirmModal.addEventListener('close', () => {
-      resolve(elements.confirmModal.returnValue === 'confirm');
+    modal.returnValue = 'cancel';
+    modal.addEventListener('close', () => {
+      resolve(modal.returnValue);
     }, { once: true });
-    elements.confirmModal.showModal();
+    modal.showModal();
   });
 }
 
@@ -643,17 +643,46 @@ function normalizeImportedItem(item) {
   };
 }
 
-async function handleImport(event) {
-  const file = event.target.files[0];
-  if (!file) return;
+// OneTab's URL/title export separates saved groups with blank lines.
+function parseOneTabExport(text) {
+  if (!text.trim()) throw new Error('No tabs found in OneTab export.');
+  const timestamp = new Date().toISOString();
+  return text.replace(/\r\n?/g, '\n').trim().split(/\n\s*\n/).map((group, index) => ({
+    id: crypto.randomUUID(),
+    timestamp,
+    type: 'group',
+    title: `OneTab group ${index + 1}`,
+    color: 'grey',
+    tabs: group.split('\n').map(line => {
+      const match = line.trim().match(/^(\S+)(?:[ \t]+\|[ \t]?(.*))?$/);
+      if (!match) throw new Error('Invalid OneTab line. Expected URL | title. Nothing was imported.');
+      return { url: match[1], title: match[2] || match[1] };
+    })
+  }));
+}
+
+async function showImportModal() {
+  if (elements.importBtn.disabled) return;
+  const action = await showModal(elements.importModal);
+  if (action === 'file') elements.importFile.click();
+  if (action === 'confirm' && await handleImport(new File([elements.oneTabText.value], 'onetab.txt'))) {
+    elements.oneTabText.value = '';
+  }
+}
+
+async function handleImport(file = elements.importFile.files[0]) {
+  if (!file || elements.importBtn.disabled) return false;
   if (file.size > CONFIG.MAX_IMPORT_BYTES) {
     showInfoToast('Import file is too large.');
-    event.target.value = '';
-    return;
+    elements.importFile.value = '';
+    return false;
   }
 
+  elements.importBtn.disabled = true;
   try {
-    const importedData = JSON.parse(await file.text());
+    const text = await file.text();
+    const isOneTab = /\.txt$/i.test(file.name || '');
+    const importedData = isOneTab ? parseOneTabExport(text) : JSON.parse(text);
     if (!Array.isArray(importedData)) {
       showInfoToast('Invalid format: expected an array.');
       return;
@@ -663,9 +692,11 @@ async function handleImport(event) {
       return;
     }
 
-    const valid = importedData
-      .filter(isValidStashItem)
-      .map(normalizeImportedItem);
+    const valid = importedData.filter(isValidStashItem).map(normalizeImportedItem);
+    // OneTab migrations are all-or-nothing so invalid tabs cannot disappear silently.
+    if (isOneTab && valid.length !== importedData.length) {
+      throw new Error(`OneTab export has unsupported URLs or a group exceeds ${CONFIG.MAX_TABS_PER_STASH} tabs. Nothing was imported.`);
+    }
     if (valid.length === 0) {
       showInfoToast('No valid stash items found in file.');
       return;
@@ -683,20 +714,20 @@ async function handleImport(event) {
     });
 
     showInfoToast(`Imported ${added} new stash${added !== 1 ? 'es' : ''}.`);
+    return true;
   } catch (err) {
     console.error("Import error:", err);
-    showInfoToast('Error parsing JSON file.');
+    showInfoToast(err instanceof SyntaxError ? 'Invalid JSON backup.' : `Import failed: ${err.message}`);
+    return false;
   } finally {
     // Reset so the same file can be re-imported
-    event.target.value = '';
+    elements.importFile.value = '';
+    elements.importBtn.disabled = false;
   }
 }
 
 async function handleDeleteAll() {
-  const confirmed = await showConfirmModal(
-    "WARNING: This will delete ALL saved tabs and groups.\n\nAre you sure you want to proceed?"
-  );
-  if (confirmed) {
+  if (await showModal(elements.confirmModal) === 'confirm') {
     await updateStashItems(() => []);
     hideUndoToast();
   }
@@ -712,8 +743,8 @@ function setupEventListeners() {
   // Global Actions
   elements.deleteAllBtn.onclick = handleDeleteAll;
   elements.exportBtn.onclick = handleExport;
-  elements.importBtn.onclick = () => elements.importFile.click();
-  elements.importFile.onchange = handleImport;
+  elements.importBtn.onclick = showImportModal;
+  elements.importFile.onchange = () => handleImport();
   elements.searchInput.oninput = loadStashes;
   document.addEventListener('keydown', event => {
     if (event.key === 'f' && (event.metaKey || event.ctrlKey)) {

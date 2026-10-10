@@ -521,14 +521,16 @@ button.danger:hover { background-color: color-mix(in srgb, var(--red) 12%, trans
 }
 #close-toast:hover { color: var(--text); background: none; }
 
-/* Confirmation Modal */
+/* Native dialogs provide focus trapping, Escape, and focus restoration. */
 .modal-overlay {
   width: 90%;
   max-width: 420px;
   padding: 0;
-  border: 0;
+  border: 1px solid var(--border);
+  border-radius: 10px;
   background: transparent;
   color: inherit;
+  box-shadow: 0 8px 24px var(--shadow);
 }
 
 .modal-overlay::backdrop {
@@ -536,25 +538,55 @@ button.danger:hover { background-color: color-mix(in srgb, var(--red) 12%, trans
 }
 
 .modal-box {
-  border: 1px solid var(--border);
   background: var(--surface);
   color: var(--text);
-  padding: 24px 32px;
-  border-radius: 6px;
-  box-shadow: 0 8px 24px var(--shadow);
+  padding: 24px;
 }
 
-.modal-box #confirm-title {
+.modal-box h2 {
+  margin: 0 0 12px;
+  font-size: 20px;
+  line-height: 1.3;
+}
+
+.modal-description {
   margin: 0 0 20px;
-  font-size: 15px;
+  color: var(--subtext0);
+  font-size: 14px;
   line-height: 1.5;
-  white-space: pre-line;
 }
 
 .modal-actions {
   display: flex;
   justify-content: flex-end;
   gap: 10px;
+  flex-wrap: wrap;
+}
+
+.modal-box button {
+  margin: 0;
+  font: inherit;
+  font-size: 14px;
+}
+
+.modal-box button.secondary {
+  border: 1px solid var(--overlay0);
+}
+
+.modal-box button.danger.filled {
+  background: var(--red);
+  color: light-dark(#ffffff, var(--mantle));
+}
+
+.modal-box button.danger.filled:hover {
+  background: color-mix(in srgb, var(--red) 85%, var(--text));
+}
+
+.modal-box textarea {
+  display: block;
+  width: 100%;
+  resize: vertical;
+  margin-bottom: 20px;
 }
 
 /* Responsive */

@@ -142,6 +142,9 @@ function createElement(initialClasses = []) {
     setAttribute() {},
     focus() {},
     showModal() {},
+    popoverOpen: false,
+    showPopover() { this.popoverOpen = true; },
+    hidePopover() { this.popoverOpen = false; },
     closest: () => null,
     style: {},
     classList: {
@@ -177,6 +180,9 @@ function runManager(initialItems, options = {}) {
   let nextImportId = 1;
   let storageSetCalls = 0;
   const elements = new Map();
+  const timers = new Map();
+  let time = 0;
+  let nextTimer = 1;
 
   const api = {
     runtime: {
@@ -224,8 +230,9 @@ function runManager(initialItems, options = {}) {
     },
     getElementById(id) {
       if (!elements.has(id)) {
-        const initialClasses = id === 'undo-toast' || id === 'info-toast' ? ['hidden'] : [];
-        elements.set(id, createElement(initialClasses));
+        const element = createElement();
+        element.hidden = id === 'notification-undo';
+        elements.set(id, element);
       }
       return elements.get(id);
     },
@@ -239,7 +246,7 @@ function runManager(initialItems, options = {}) {
     Blob,
     File,
     URL,
-    clearTimeout() {},
+    clearTimeout: id => timers.delete(id),
     console: { error: (...args) => errors.push(args) },
     crypto: { randomUUID: () => `import-id-${nextImportId++}` },
     document,
@@ -253,7 +260,11 @@ function runManager(initialItems, options = {}) {
       setItem: (key, value) => sessionValues.set(key, value),
       removeItem: key => sessionValues.delete(key)
     },
-    setTimeout: () => 0,
+    setTimeout(callback, delay) {
+      const id = nextTimer++;
+      timers.set(id, { callback, at: time + delay });
+      return id;
+    },
     structuredClone
   });
   vm.runInContext(managerSource, context);
@@ -264,6 +275,18 @@ function runManager(initialItems, options = {}) {
     errors,
     groupedTabs,
     updatedGroups,
+    async advanceTime(milliseconds) {
+      const end = time + milliseconds;
+      for (;;) {
+        const next = [...timers.entries()].sort((a, b) => a[1].at - b[1].at)[0];
+        if (!next || next[1].at > end) break;
+        const [id, timer] = next;
+        timers.delete(id);
+        time = timer.at;
+        await timer.callback();
+      }
+      time = end;
+    },
     getElement: id => elements.get(id),
     triggerDocumentEvent: (name, event) => documentListeners[name](event),
     getItems: () => clone(items)
@@ -471,12 +494,12 @@ test('undoes explicit stash deletion through the Chromium extension API', async 
   await vm.runInContext("deleteStash('delete-me')", result.context);
 
   assert.deepEqual(result.getItems(), []);
-  assert.equal(result.getElement('undo-toast').classList.contains('hidden'), false);
+  assert.equal(result.getElement('notification').popoverOpen, true);
 
   await vm.runInContext('handleUndo()', result.context);
 
   assert.deepEqual(result.getItems(), [stash]);
-  assert.equal(result.getElement('undo-toast').classList.contains('hidden'), true);
+  assert.equal(result.getElement('notification').popoverOpen, false);
 });
 
 test('undoes individual-tab deletion through the Chromium extension API', async () => {
@@ -493,12 +516,12 @@ test('undoes individual-tab deletion through the Chromium extension API', async 
   await vm.runInContext("removeTabFromStash('trim-me', 0)", result.context);
 
   assert.deepEqual(result.getItems()[0].tabs, [stash.tabs[1]]);
-  assert.equal(result.getElement('undo-toast').classList.contains('hidden'), false);
+  assert.equal(result.getElement('notification').popoverOpen, true);
 
   await vm.runInContext('handleUndo()', result.context);
 
   assert.deepEqual(result.getItems(), [stash]);
-  assert.equal(result.getElement('undo-toast').classList.contains('hidden'), true);
+  assert.equal(result.getElement('notification').popoverOpen, false);
 });
 
 test('restores a tab group through the Chromium extension API', async () => {
@@ -532,7 +555,9 @@ test('restores a tab group through the Chromium extension API', async () => {
     collapsed: false
   }]]);
   assert.deepEqual(result.getItems(), []);
-  assert.equal(result.getElement('undo-toast').classList.contains('hidden'), true);
+  assert.equal(result.getElement('notification').popoverOpen, true);
+  assert.equal(result.getElement('notification-undo').hidden, true);
+  assert.match(result.getElement('notification-message').textContent, /Restored your tabs/);
 
   await vm.runInContext('handleUndo()', result.context);
 
@@ -645,8 +670,8 @@ test('reports cleanup failure and retains the restored stash', async () => {
 
   assert.equal(result.createdTabs.length, 1);
   assert.deepEqual(result.getItems(), [stash]);
-  assert.equal(result.getElement('info-toast').classList.contains('hidden'), false);
-  assert.match(result.getElement('info-msg').textContent, /kept to avoid data loss/i);
+  assert.equal(result.getElement('notification').popoverOpen, true);
+  assert.match(result.getElement('notification-message').textContent, /kept to avoid data loss/i);
 });
 
 test('search ranks stash titles, tab titles, and URLs while preserving tie order', () => {
@@ -766,7 +791,7 @@ test('rejects Stasher JSON over the item limit', async () => {
 
   await vm.runInContext('handleImport(importEvent.target.files[0])', result.context);
 
-  assert.match(result.getElement('info-msg').textContent, /too many stash items/i);
+  assert.match(result.getElement('notification-message').textContent, /too many stash items/i);
 });
 
 test('imports OneTab groups from a file, preserving order, titles, duplicate URLs, and existing stashes', async () => {
@@ -794,7 +819,7 @@ test('imports OneTab groups from a file, preserving order, titles, duplicate URL
   ]);
   assert.equal(result.getElement('importFile').value, '');
   assert.equal(result.getElement('importBtn').disabled, false);
-  assert.match(result.getElement('info-msg').textContent, /Imported 2 new stashes/);
+  assert.match(result.getElement('notification-message').textContent, /Imported 2 new stashes/);
 
   // Imported groups remain compatible with Stasher's backup and restore paths.
   result.context.importedGroup = first;
@@ -823,7 +848,7 @@ test('imports pasted OneTab exports through the shared import handler', async ()
   assert.deepEqual(second.tabs.map(tab => tab.url), ['https://three.example']);
   assert.deepEqual(kept, existing);
   assert.equal(result.getElement('onetab-text').value, '');
-  assert.match(result.getElement('info-msg').textContent, /Imported 2 new stashes/);
+  assert.match(result.getElement('notification-message').textContent, /Imported 2 new stashes/);
 });
 
 test('imports OneTab text files through the file picker and resets it', async () => {
@@ -860,7 +885,7 @@ test('rejects malformed or unsupported OneTab lines before saving any groups', a
 
     assert.deepEqual(result.getItems(), [existing]);
     assert.equal(result.getElement('onetab-text').value, text);
-    assert.match(result.getElement('info-msg').textContent, /Nothing was imported/);
+    assert.match(result.getElement('notification-message').textContent, /Nothing was imported/);
     assert.equal(result.getElement('importBtn').disabled, false);
   }
 });
@@ -878,7 +903,7 @@ test('enforces OneTab import size and group limits without saving partial data',
 
     await vm.runInContext('handleImport(oneTabFile)', result.context);
 
-    assert.match(result.getElement('info-msg').textContent, message);
+    assert.match(result.getElement('notification-message').textContent, message);
     assert.deepEqual(result.getItems(), []);
   }
   const result = runManager([]);
@@ -900,7 +925,7 @@ test('failed OneTab paste import preserves existing stashes and text for retry',
   assert.deepEqual(result.getItems(), [existing]);
   assert.equal(result.getElement('onetab-text').value, text);
   assert.equal(result.getElement('importBtn').disabled, false);
-  assert.match(result.getElement('info-msg').textContent, /Import failed: Storage update failed/);
+  assert.match(result.getElement('notification-message').textContent, /Import failed: Storage update failed/);
 
   await result.getElement('importBtn').onclick();
   assert.equal(result.getItems().length, 2);
@@ -974,7 +999,9 @@ test('Delete All clears storage and pending Undo', async () => {
   await vm.runInContext('handleDeleteAll()', result.context);
 
   assert.deepEqual(result.getItems(), []);
-  assert.equal(result.getElement('undo-toast').classList.contains('hidden'), true);
+  assert.equal(result.getElement('notification').popoverOpen, true);
+  assert.equal(result.getElement('notification-undo').hidden, true);
+  assert.match(result.getElement('notification-message').textContent, /Deleted all stashes/);
 
   await vm.runInContext('handleUndo()', result.context);
 
@@ -996,14 +1023,151 @@ test('failed Delete All preserves storage and pending Undo', async () => {
 
   await vm.runInContext("deleteStash('deleted-first')", result.context);
   vm.runInContext("showModal = async () => 'confirm'", result.context);
-  await assert.rejects(vm.runInContext('handleDeleteAll()', result.context));
+  await vm.runInContext('handleDeleteAll()', result.context);
 
   assert.deepEqual(result.getItems(), [remaining]);
-  assert.equal(result.getElement('undo-toast').classList.contains('hidden'), false);
+  assert.equal(result.getElement('notification').popoverOpen, true);
+  assert.equal(result.getElement('notification-undo').hidden, false);
+  assert.match(result.getElement('notification-message').textContent, /Could not delete all stashes/);
 
   await vm.runInContext('handleUndo()', result.context);
 
   assert.deepEqual(result.getItems(), [deleted, remaining]);
+});
+
+test('manager notifications use one native popover and no legacy popup path', () => {
+  const html = readFileSync(join(root, 'src/manager/manager.html'), 'utf8');
+  const css = readFileSync(join(root, 'src/manager/manager.css'), 'utf8');
+  assert.equal((html.match(/popover="manual"/g) ?? []).length, 1);
+  assert.match(html, /id="notification"[^>]+role="status"/);
+  assert.match(html, /id="notification-undo"[^>]+hidden/);
+  assert.equal((managerSource.match(/\.showPopover\(/g) ?? []).length, 1);
+  assert.equal((managerSource.match(/\.hidePopover\(/g) ?? []).length, 1);
+  assert.doesNotMatch(html + css + managerSource, /undo-toast|info-toast|(?:show|hide)(?:Undo|Info)Toast|\balert\s*\(/);
+});
+
+test('delete, import, export and restore share a notification without losing pending Undo', async () => {
+  const deleted = { id: 'deleted', title: 'Deleted', tabs: [] };
+  const restored = { id: 'restored', tabs: [{ title: 'Saved', url: 'https://saved.example' }] };
+  const result = runManager([deleted, restored]);
+  const notification = result.getElement('notification');
+  const message = result.getElement('notification-message');
+  const undo = result.getElement('notification-undo');
+  await vm.runInContext("deleteStash('deleted')", result.context);
+  assert.equal(notification.popoverOpen, true);
+  assert.equal(undo.hidden, false);
+  assert.match(message.textContent, /Deleted/);
+
+  await vm.runInContext("handleImport(new File(['https://imported.example | Imported'], 'onetab.txt'))", result.context);
+  assert.match(message.textContent, /Imported 1 new stash/);
+  assert.equal(undo.hidden, false);
+
+  const create = result.context.document.createElement;
+  result.context.document.createElement = () => Object.assign(create(), { click() {} });
+  await vm.runInContext('handleExport()', result.context);
+  await result.advanceTime(0);
+  assert.match(message.textContent, /Exported/);
+  assert.equal(undo.hidden, false);
+
+  await vm.runInContext(`restoreGroup(${JSON.stringify(restored)})`, result.context);
+  assert.match(message.textContent, /Restored/);
+  assert.equal(undo.hidden, false);
+  await undo.onclick();
+  assert.deepEqual(result.getItems().map(item => item.id), ['deleted', 'import-id-1']);
+  assert.equal(notification.popoverOpen, false);
+});
+
+test('a new notification resets dismissal and normal messages expire after three seconds', async () => {
+  const result = runManager([]);
+  await vm.runInContext("showNotification('First')", result.context);
+  await result.advanceTime(2999);
+  assert.equal(result.getElement('notification').popoverOpen, true);
+  await vm.runInContext("showNotification('Second')", result.context);
+  await result.advanceTime(2999);
+  assert.equal(result.getElement('notification').popoverOpen, true);
+  assert.equal(result.getElement('notification-message').textContent, 'Second');
+  assert.equal(result.getElement('notification-undo').hidden, true);
+  await result.advanceTime(1);
+  assert.equal(result.getElement('notification').popoverOpen, false);
+});
+
+test('deletion notifications allow successive Undo actions and expire after five seconds', async () => {
+  const first = { id: 'first', title: 'First', tabs: [] };
+  const second = { id: 'second', title: 'Second', tabs: [] };
+  const result = runManager([first, second]);
+  await vm.runInContext("deleteStash('first')", result.context);
+  await vm.runInContext("deleteStash('second')", result.context);
+  assert.equal(result.getElement('notification-message').textContent, '2 items deleted');
+  await result.getElement('notification-undo').onclick();
+  assert.deepEqual(result.getItems(), [second]);
+  assert.equal(result.getElement('notification-undo').hidden, false);
+  await result.advanceTime(4999);
+  assert.equal(result.getElement('notification').popoverOpen, true);
+  await result.advanceTime(1);
+  assert.equal(result.getElement('notification').popoverOpen, false);
+  await vm.runInContext('handleUndo()', result.context);
+  assert.deepEqual(result.getItems(), [second]);
+});
+
+test('dismissing a notification clears pending Undo instead of reviving it later', async () => {
+  const result = runManager([{ id: 'deleted', tabs: [] }]);
+  await vm.runInContext("deleteStash('deleted')", result.context);
+  result.getElement('notification-dismiss').onclick();
+  assert.equal(result.getElement('notification').popoverOpen, false);
+  await vm.runInContext("showNotification('Another message'); handleUndo()", result.context);
+  assert.equal(result.getElement('notification-undo').hidden, true);
+  assert.deepEqual(result.getItems(), []);
+});
+
+test('failed stash and tab deletions report an error without offering a false Undo', async () => {
+  const stash = { id: 'kept', tabs: [{ title: 'Saved', url: 'https://saved.example' }] };
+  for (const action of ["deleteStash('kept')", "removeTabFromStash('kept', 0)"]) {
+    const result = runManager([stash], { failStorageSetAt: 1 });
+    await vm.runInContext(action, result.context);
+    assert.deepEqual(result.getItems(), [stash]);
+    assert.equal(result.getElement('notification').popoverOpen, true);
+    assert.equal(result.getElement('notification-undo').hidden, true);
+    assert.match(result.getElement('notification-message').textContent, /saved tabs were kept/);
+    await vm.runInContext('handleUndo()', result.context);
+    assert.deepEqual(result.getItems(), [stash]);
+  }
+});
+
+test('a failed Undo stays available for retry in the same notification', async () => {
+  const stash = { id: 'retry', tabs: [] };
+  const result = runManager([stash], { failStorageSetAt: 2 });
+  await vm.runInContext("deleteStash('retry')", result.context);
+  const undo = result.getElement('notification-undo');
+  await undo.onclick();
+  assert.deepEqual(result.getItems(), []);
+  assert.equal(undo.hidden, false);
+  assert.equal(undo.disabled, false);
+  assert.match(result.getElement('notification-message').textContent, /Try Undo again/);
+  await undo.onclick();
+  assert.deepEqual(result.getItems(), [stash]);
+  assert.equal(result.getElement('notification').popoverOpen, false);
+});
+
+test('an Undo in progress blocks duplicate clicks and cannot expire during a slow save', async () => {
+  const stash = { id: 'slow', tabs: [] };
+  const result = runManager([stash]);
+  await vm.runInContext("deleteStash('slow')", result.context);
+  const set = result.context.chrome.storage.local.set;
+  let finish;
+  result.context.chrome.storage.local.set = async value => {
+    await new Promise(resolve => { finish = resolve; });
+    await set(value);
+  };
+  const pending = result.getElement('notification-undo').onclick();
+  while (!finish) await new Promise(resolve => setImmediate(resolve));
+  await result.getElement('notification-undo').onclick();
+  await result.advanceTime(6000);
+  assert.equal(result.getElement('notification').popoverOpen, true);
+  assert.equal(result.getElement('notification-undo').disabled, true);
+  finish();
+  await pending;
+  assert.deepEqual(result.getItems(), [stash]);
+  assert.equal(result.getElement('notification').popoverOpen, false);
 });
 
 test('manifest defines a Chromium MV3 service worker', () => {

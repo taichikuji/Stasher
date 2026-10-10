@@ -75,15 +75,10 @@
   <main id="stash-container" tabindex="-1" aria-live="polite">
   </main>
 
-  <div id="undo-toast" class="undo-toast hidden" role="status" aria-atomic="true">
-    <span id="undo-msg">Item deleted</span>
-    <button id="undo-btn" type="button">UNDO</button>
-    <button id="close-toast" class="icon-btn" type="button" aria-label="Dismiss notification">✕</button>
-  </div>
-
-  <div id="info-toast" class="undo-toast hidden" role="status" aria-atomic="true">
-    <span id="info-msg"></span>
-    <button id="close-info-toast" class="icon-btn" type="button" aria-label="Dismiss notification">✕</button>
+  <div id="notification" popover="manual" role="status" aria-atomic="true">
+    <span id="notification-message"></span>
+    <button id="notification-undo" class="primary" type="button" hidden>Undo deletion</button>
+    <button id="notification-dismiss" class="icon-btn" type="button" aria-label="Dismiss notification">✕</button>
   </div>
 
   <dialog id="import-modal" class="modal-overlay" aria-labelledby="import-title" aria-describedby="import-description import-note">

@@ -6,7 +6,7 @@ const CONFIG = {
   STORAGE_KEY: 'stashedItems',
   CHROME_COLORS: ['grey', 'blue', 'red', 'yellow', 'green', 'pink', 'purple', 'cyan', 'orange'],
   UNDO_TIMEOUT_MS: 5000,
-  TOAST_DURATION_MS: 3000,
+  NOTIFICATION_TIMEOUT_MS: 3000,
   MAX_TITLE_LENGTH: 200,
   MAX_IMPORT_BYTES: 1024 * 1024,
   MAX_IMPORT_ITEMS: 1000,
@@ -17,8 +17,7 @@ const CONFIG = {
 // State Management
 const state = {
   undoStack: [],
-  undoTimeout: null,
-  infoTimeout: null,
+  notificationTimeout: null,
   restoringIds: new Set()
 };
 
@@ -54,13 +53,10 @@ function safeColor(color) {
 // DOM Elements
 const elements = {
   container: document.getElementById('stash-container'),
-  undoToast: document.getElementById('undo-toast'),
-  undoMsg: document.getElementById('undo-msg'),
-  undoBtn: document.getElementById('undo-btn'),
-  closeToastBtn: document.getElementById('close-toast'),
-  infoToast: document.getElementById('info-toast'),
-  infoMsg: document.getElementById('info-msg'),
-  closeInfoToastBtn: document.getElementById('close-info-toast'),
+  notification: document.getElementById('notification'),
+  notificationMessage: document.getElementById('notification-message'),
+  undoBtn: document.getElementById('notification-undo'),
+  dismissNotificationBtn: document.getElementById('notification-dismiss'),
   deleteAllBtn: document.getElementById('deleteAllBtn'),
   exportBtn: document.getElementById('exportBtn'),
   importBtn: document.getElementById('importBtn'),
@@ -229,18 +225,18 @@ function createTabListItem(tab, stashId, tabIndex) {
  */
 async function removeTabFromStash(stashId, tabIndex) {
   try {
-    let removed = false;
+    let undoEntry;
     await updateStashItems(items => {
       const index = items.findIndex(i => i.id === stashId);
       if (index === -1 || !Array.isArray(items[index].tabs)) return null;
       if (tabIndex < 0 || tabIndex >= items[index].tabs.length) return null;
 
       const removedTab = items[index].tabs[tabIndex];
-      state.undoStack.push({
+      undoEntry = {
         kind: 'tab',
         stashSnapshot: structuredClone(items[index]),
         label: removedTab.title || removedTab.url || 'Tab'
-      });
+      };
 
       items[index].tabs.splice(tabIndex, 1);
 
@@ -248,12 +244,15 @@ async function removeTabFromStash(stashId, tabIndex) {
         items.splice(index, 1);
       }
 
-      removed = true;
       return items;
     });
-    if (removed) showUndoToast();
+    if (undoEntry) {
+      state.undoStack.push(undoEntry);
+      notifyDeletion();
+    }
   } catch (error) {
     console.error("Error removing tab from stash:", error);
+    showNotification('Could not remove this tab. Your saved tabs were kept.');
   }
 }
 
@@ -471,10 +470,11 @@ async function restoreGroup(item) {
     // leave a second, apparently unrestored copy behind.
     const deleted = await deleteStash(item.id, { undo: false });
     if (!deleted) throw new Error('Restored stash was not found during cleanup');
+    showNotification('Restored your tabs.');
 
   } catch (error) {
     console.error("Error restoring group:", error);
-    showInfoToast(tabIds.length
+    showNotification(tabIds.length
       ? 'Tabs were opened, but the saved stash could not be removed. It was kept to avoid data loss.'
       : 'Could not restore this stash. Your saved tabs were kept.');
   } finally {
@@ -485,59 +485,49 @@ async function restoreGroup(item) {
 async function deleteStash(id, { undo = true } = {}) {
   try {
     let deleted = false;
+    let undoEntry;
     await updateStashItems(items => {
-      // 1. Get current list to find the item we are about to delete
       const itemIndex = items.findIndex(i => i.id === id);
       if (itemIndex === -1) return null;
 
-      // 2. Save it to memory (The Safety Net)
-      if (undo) state.undoStack.push({ kind: 'stash', item: items[itemIndex] });
+      if (undo) undoEntry = { kind: 'stash', item: items[itemIndex] };
 
-      // 3. Remove it from storage immediately
       deleted = true;
       return items.filter(i => i.id !== id);
     });
 
-    // 4. Show the Undo Toast
-    if (deleted && undo) showUndoToast();
+    if (undoEntry) {
+      state.undoStack.push(undoEntry);
+      notifyDeletion();
+    }
     return deleted;
   } catch (error) {
     console.error("Error deleting stash:", error);
     if (!undo) throw error;
+    showNotification('Could not delete this stash. Your saved tabs were kept.');
     return false;
   }
 }
 
-function showUndoToast() {
+function notifyDeletion() {
   const count = state.undoStack.length;
   if (count === 0) return;
 
   if (count === 1) {
     const entry = state.undoStack[0];
     const name = entry.kind === 'stash' ? entry.item.title || 'Group' : entry.label || 'Tab';
-    elements.undoMsg.textContent = `Deleted "${name.substring(0, 20)}${name.length > 20 ? '...' : ''}"`;
+    showNotification(`Deleted "${name.substring(0, 20)}${name.length > 20 ? '...' : ''}"`);
   } else {
-    elements.undoMsg.textContent = `${count} items deleted`;
+    showNotification(`${count} items deleted`);
   }
-
-  if (state.undoTimeout) clearTimeout(state.undoTimeout);
-
-  elements.undoToast.classList.remove('hidden');
-
-  state.undoTimeout = setTimeout(hideUndoToast, CONFIG.UNDO_TIMEOUT_MS);
-}
-
-function hideUndoToast() {
-  elements.undoToast.classList.add('hidden');
-  if (state.undoTimeout) clearTimeout(state.undoTimeout);
-  // Hiding the toast forfeits any pending undo items; otherwise dismissed
-  // entries would resurface in the count on the next deletion.
-  state.undoStack = [];
 }
 
 async function handleUndo() {
+  if (elements.undoBtn.disabled) return;
   const entry = state.undoStack.pop();
   if (!entry) return;
+  elements.undoBtn.disabled = true;
+  clearTimeout(state.notificationTimeout);
 
   try {
     await updateStashItems(items => {
@@ -555,32 +545,36 @@ async function handleUndo() {
       }
     });
 
-    // If more deletions remain in the stack, refresh the toast for the next undo;
-    // otherwise hide it.
     if (state.undoStack.length > 0) {
-      showUndoToast();
+      notifyDeletion();
     } else {
-      hideUndoToast();
+      dismissNotification();
     }
   } catch (error) {
     console.error("Error undoing delete:", error);
     state.undoStack.push(entry);
+    showNotification('Could not undo this deletion. Try Undo again.');
+  } finally {
+    elements.undoBtn.disabled = false;
   }
 }
 
-// Info Toast (replaces alert) — uses its own element so it never collides
-// with an in-flight undo toast.
-function showInfoToast(message) {
-  elements.infoMsg.textContent = message;
-  elements.infoToast.classList.remove('hidden');
-
-  if (state.infoTimeout) clearTimeout(state.infoTimeout);
-  state.infoTimeout = setTimeout(hideInfoToast, CONFIG.TOAST_DURATION_MS);
+// Every notification uses and should use this native popover; pending deletions keep Undo available.
+function showNotification(message) {
+  clearTimeout(state.notificationTimeout);
+  elements.notificationMessage.textContent = message;
+  elements.undoBtn.hidden = state.undoStack.length === 0;
+  elements.notification.showPopover();
+  state.notificationTimeout = setTimeout(dismissNotification,
+    state.undoStack.length ? CONFIG.UNDO_TIMEOUT_MS : CONFIG.NOTIFICATION_TIMEOUT_MS);
 }
 
-function hideInfoToast() {
-  elements.infoToast.classList.add('hidden');
-  if (state.infoTimeout) clearTimeout(state.infoTimeout);
+function dismissNotification() {
+  clearTimeout(state.notificationTimeout);
+  elements.notification.hidePopover();
+  elements.undoBtn.hidden = true;
+  // Dismissal or expiry forfeits Undo so later notifications cannot revive it.
+  state.undoStack = [];
 }
 
 // Native dialogs share their close handling and return the chosen button value.
@@ -605,10 +599,10 @@ async function handleExport() {
     a.download = `stasher-export-${dateStr}.json`;
     a.click();
     setTimeout(() => URL.revokeObjectURL(url), 0);
-    showInfoToast('Exported your stashes.');
+    showNotification('Exported your stashes.');
   } catch (error) {
     console.error("Error exporting:", error);
-    showInfoToast('Could not export your stashes.');
+    showNotification('Could not export your stashes.');
   }
 }
 
@@ -673,7 +667,7 @@ async function showImportModal() {
 async function handleImport(file = elements.importFile.files[0]) {
   if (!file || elements.importBtn.disabled) return false;
   if (file.size > CONFIG.MAX_IMPORT_BYTES) {
-    showInfoToast('Import file is too large.');
+    showNotification('Import file is too large.');
     elements.importFile.value = '';
     return false;
   }
@@ -684,11 +678,11 @@ async function handleImport(file = elements.importFile.files[0]) {
     const isOneTab = /\.txt$/i.test(file.name || '');
     const importedData = isOneTab ? parseOneTabExport(text) : JSON.parse(text);
     if (!Array.isArray(importedData)) {
-      showInfoToast('Invalid format: expected an array.');
+      showNotification('Invalid format: expected an array.');
       return;
     }
     if (importedData.length > CONFIG.MAX_IMPORT_ITEMS) {
-      showInfoToast('Import contains too many stash items.');
+      showNotification('Import contains too many stash items.');
       return;
     }
 
@@ -698,7 +692,7 @@ async function handleImport(file = elements.importFile.files[0]) {
       throw new Error(`OneTab export has unsupported URLs or a group exceeds ${CONFIG.MAX_TABS_PER_STASH} tabs. Nothing was imported.`);
     }
     if (valid.length === 0) {
-      showInfoToast('No valid stash items found in file.');
+      showNotification('No valid stash items found in file.');
       return;
     }
 
@@ -713,11 +707,11 @@ async function handleImport(file = elements.importFile.files[0]) {
       return unique;
     });
 
-    showInfoToast(`Imported ${added} new stash${added !== 1 ? 'es' : ''}.`);
+    showNotification(`Imported ${added} new stash${added !== 1 ? 'es' : ''}.`);
     return true;
   } catch (err) {
     console.error("Import error:", err);
-    showInfoToast(err instanceof SyntaxError ? 'Invalid JSON backup.' : `Import failed: ${err.message}`);
+    showNotification(err instanceof SyntaxError ? 'Invalid JSON backup.' : `Import failed: ${err.message}`);
     return false;
   } finally {
     // Reset so the same file can be re-imported
@@ -728,17 +722,21 @@ async function handleImport(file = elements.importFile.files[0]) {
 
 async function handleDeleteAll() {
   if (await showModal(elements.confirmModal) === 'confirm') {
-    await updateStashItems(() => []);
-    hideUndoToast();
+    try {
+      await updateStashItems(() => []);
+      state.undoStack = [];
+      showNotification('Deleted all stashes.');
+    } catch (error) {
+      console.error('Error deleting all stashes:', error);
+      showNotification('Could not delete all stashes. Your saved tabs were kept.');
+    }
   }
 }
 
 function setupEventListeners() {
   // Keep one-time page-level wiring separate from per-card listeners created during rendering.
-  // Toast Listeners
   elements.undoBtn.onclick = handleUndo;
-  elements.closeToastBtn.onclick = hideUndoToast;
-  elements.closeInfoToastBtn.onclick = hideInfoToast;
+  elements.dismissNotificationBtn.onclick = dismissNotification;
 
   // Global Actions
   elements.deleteAllBtn.onclick = handleDeleteAll;

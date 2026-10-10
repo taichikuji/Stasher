@@ -128,7 +128,7 @@ a {
 .group-badge,
 .link-item,
 .edit-container,
-.undo-toast {
+#notification:popover-open {
   display: flex;
   align-items: center;
 }
@@ -433,10 +433,13 @@ button.danger:hover { background-color: color-mix(in srgb, var(--red) 12%, trans
 .save-btn { color: var(--green); }
 .cancel-btn { color: var(--red); }
 
-.undo-toast {
+#notification {
   position: fixed;
-  bottom: 20px;
+  inset: auto;
+  bottom: 84px;
   left: 50%;
+  margin: 0;
+  border: 0;
   transform: translateX(-50%);
   background-color: var(--mantle);
   color: var(--text);
@@ -444,40 +447,21 @@ button.danger:hover { background-color: color-mix(in srgb, var(--red) 12%, trans
   border-radius: 7px;
   gap: 15px;
   box-shadow: 0 4px 12px var(--shadow);
-  z-index: 1000;
-  min-width: 300px;
+  width: max-content;
+  min-width: min(300px, calc(100% - 24px));
+  max-width: calc(100% - 24px);
   justify-content: space-between;
   font-size: 14px;
-  transition: opacity 0.3s, transform 0.3s;
 }
 
-/* Hide/Show states */
-.undo-toast.hidden {
-  opacity: 0;
-  pointer-events: none;
-  transform: translate(-50%, 20px);
+#notification-message {
+  overflow-wrap: anywhere;
 }
 
-#info-toast {
-  bottom: 84px;
-}
-
-/* Undo Button */
-#undo-btn {
-  color: light-dark(var(--text), var(--blue));
-  font-weight: bold;
-  padding: 4px 8px;
+#notification button {
+  flex-shrink: 0;
   margin: 0;
-  text-transform: uppercase;
 }
-#undo-btn:hover { background-color: var(--surface1); border-radius: 6px; }
-
-/* Close X */
-#close-toast {
-  color: var(--subtext0);
-  font-size: 14px;
-}
-#close-toast:hover { color: var(--text); background: none; }
 
 /* Native dialogs provide focus trapping, Escape, and focus restoration. */
 .modal-overlay {

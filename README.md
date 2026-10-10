@@ -75,7 +75,7 @@ flowchart TD
 
 Restoring uses existing group permission and never requests it. Renaming or recoloring a loose stash does not turn it into a group. If there are no eligible URLs, the stash stays saved. If restoration or stash removal fails, the stash is kept, though some tabs may already have opened. Restored tabs open unpinned; successful whole-stash restoration removes the stash without adding an Undo action.
 
-In the manager, search stash names, tab titles, and URLs, rename stashes, change their colors, or remove saved tabs and stashes. Import and export JSON backups to move your stashes between devices. Saved titles and URLs stay in Chrome local storage on this device, with no account or cloud sync.
+In the manager, search stash names, tab titles, and URLs, rename stashes, change their colors, or remove saved tabs and stashes. The **More actions** (⋮) button opens Help, Export, Import, and Delete all stashes; click outside or press Escape to close it. Import and export JSON backups to move your stashes between devices. Saved titles and URLs stay in Chrome local storage on this device, with no account or cloud sync.
 
 Stasher is an on-demand manager, with search inside the manager and light/dark themes that follow your browser configuration. It is simple on purpose. It's your mess. You deal with it.
 

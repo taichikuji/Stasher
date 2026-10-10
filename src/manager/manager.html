@@ -21,6 +21,11 @@
     <symbol id="icon-help" viewBox="2 2 20 20">
       <path d="M9.1 9a3 3 0 1 1 4.9 2.3c-1.2.9-2 1.4-2 2.7M12 17h.01M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18Z" />
     </symbol>
+    <symbol id="icon-more" viewBox="0 0 24 24" fill="currentColor" stroke="none">
+      <circle cx="12" cy="6" r="2" />
+      <circle cx="12" cy="12" r="2" />
+      <circle cx="12" cy="18" r="2" />
+    </symbol>
     <symbol id="icon-export" viewBox="3 3 18 18">
       <path d="M19 15v2a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2v-2M12 15V5m0 0 2 2m-2-2-2 2" />
     </symbol>
@@ -64,13 +69,16 @@
     </div>
     <div class="header-actions" role="group" aria-label="Stash actions">
       <button id="catBtn" class="icon-button" type="button" aria-label="Pet" title="Pet">🐈</button>
-      <a class="icon-button" href="https://github.com/taichikuji/Stasher/wiki/How-to-use-Stasher" target="_blank" rel="noopener noreferrer" aria-label="How to use Stasher" title="How to use Stasher"><svg class="button-icon" aria-hidden="true"><use href="#icon-help"></use></svg></a>
-      <button id="exportBtn" class="icon-button" type="button" aria-label="Export Stasher JSON backup" title="Export Stasher JSON backup"><svg class="button-icon" aria-hidden="true"><use href="#icon-export"></use></svg></button>
-      <input type="file" id="importFile" accept=".json,.txt" class="visually-hidden" aria-label="Import Stasher JSON or OneTab text file">
-      <button id="importBtn" class="icon-button" type="button" aria-label="Import" title="Import"><svg class="button-icon" aria-hidden="true"><use href="#icon-import"></use></svg></button>
-      <button id="deleteAllBtn" class="icon-button danger" type="button" aria-label="Delete all" title="Delete ALL"><svg class="button-icon" aria-hidden="true"><use href="#icon-delete-stash"></use></svg></button>
+      <button id="moreBtn" class="icon-button" type="button" popovertarget="actions-menu" aria-label="More actions" title="More actions"><svg class="button-icon" aria-hidden="true"><use href="#icon-more"></use></svg></button>
+      <div id="actions-menu" class="actions-menu" popover="auto" role="group" aria-label="More stash actions">
+        <a class="actions-menu-item" href="https://github.com/taichikuji/Stasher/wiki/How-to-use-Stasher" target="_blank" rel="noopener noreferrer"><svg class="button-icon" aria-hidden="true"><use href="#icon-help"></use></svg>Help</a>
+        <button id="exportBtn" class="actions-menu-item" type="button"><svg class="button-icon" aria-hidden="true"><use href="#icon-export"></use></svg>Export</button>
+        <button id="importBtn" class="actions-menu-item" type="button"><svg class="button-icon" aria-hidden="true"><use href="#icon-import"></use></svg>Import</button>
+        <button id="deleteAllBtn" class="actions-menu-item danger" type="button"><svg class="button-icon" aria-hidden="true"><use href="#icon-delete-stash"></use></svg>Delete all stashes</button>
+      </div>
     </div>
   </header>
+  <input type="file" id="importFile" accept=".json,.txt" hidden aria-label="Import Stasher JSON or OneTab text file">
 
   <main id="stash-container" tabindex="-1" aria-live="polite">
   </main>

@@ -57,6 +57,7 @@ const elements = {
   notificationMessage: document.getElementById('notification-message'),
   undoBtn: document.getElementById('notification-undo'),
   dismissNotificationBtn: document.getElementById('notification-dismiss'),
+  actionsMenu: document.getElementById('actions-menu'),
   deleteAllBtn: document.getElementById('deleteAllBtn'),
   exportBtn: document.getElementById('exportBtn'),
   importBtn: document.getElementById('importBtn'),
@@ -739,6 +740,10 @@ function setupEventListeners() {
   elements.dismissNotificationBtn.onclick = dismissNotification;
 
   // Global Actions
+  // Close before an action opens a dialog so focus returns to the More button.
+  elements.actionsMenu.addEventListener('click', event => {
+    if (event.target.closest('a, button')) elements.actionsMenu.hidePopover();
+  }, { capture: true });
   elements.deleteAllBtn.onclick = handleDeleteAll;
   elements.exportBtn.onclick = handleExport;
   elements.importBtn.onclick = showImportModal;

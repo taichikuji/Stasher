@@ -136,8 +136,8 @@ function createElement(initialClasses = []) {
       handlers.push(listener);
       listeners.set(type, handlers);
     },
-    async trigger(type) {
-      await Promise.all((listeners.get(type) ?? []).map(listener => listener({ type, target: this })));
+    async trigger(type, event = {}) {
+      await Promise.all((listeners.get(type) ?? []).map(listener => listener({ type, target: this, ...event })));
     },
     setAttribute() {},
     focus() {},
@@ -1035,14 +1035,34 @@ test('failed Delete All preserves storage and pending Undo', async () => {
   assert.deepEqual(result.getItems(), [deleted, remaining]);
 });
 
+test('selecting a header action closes its popover without dismissing pending Undo', async () => {
+  const stash = { id: 'deleted', tabs: [] };
+  const result = runManager([stash]);
+  await vm.runInContext("deleteStash('deleted')", result.context);
+  const menu = result.getElement('actions-menu');
+  menu.showPopover();
+
+  await menu.trigger('click');
+  assert.equal(menu.popoverOpen, true);
+  await menu.trigger('click', {
+    target: { closest: () => result.getElement('exportBtn') }
+  });
+
+  assert.equal(menu.popoverOpen, false);
+  assert.equal(result.getElement('notification').popoverOpen, true);
+  assert.equal(result.getElement('notification-undo').hidden, false);
+  await result.getElement('notification-undo').onclick();
+  assert.deepEqual(result.getItems(), [stash]);
+});
+
 test('manager notifications use one native popover and no legacy popup path', () => {
   const html = readFileSync(join(root, 'src/manager/manager.html'), 'utf8');
   const css = readFileSync(join(root, 'src/manager/manager.css'), 'utf8');
   assert.equal((html.match(/popover="manual"/g) ?? []).length, 1);
   assert.match(html, /id="notification"[^>]+role="status"/);
   assert.match(html, /id="notification-undo"[^>]+hidden/);
-  assert.equal((managerSource.match(/\.showPopover\(/g) ?? []).length, 1);
-  assert.equal((managerSource.match(/\.hidePopover\(/g) ?? []).length, 1);
+  assert.equal((managerSource.match(/elements\.notification\.showPopover\(/g) ?? []).length, 1);
+  assert.equal((managerSource.match(/elements\.notification\.hidePopover\(/g) ?? []).length, 1);
   assert.doesNotMatch(html + css + managerSource, /undo-toast|info-toast|(?:show|hide)(?:Undo|Info)Toast|\balert\s*\(/);
 });
 

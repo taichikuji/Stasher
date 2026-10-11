@@ -481,7 +481,7 @@ button.danger:hover { background-color: color-mix(in srgb, var(--red) 12%, trans
 #notification {
   position: fixed;
   inset: auto;
-  bottom: 84px;
+  bottom: 20px;
   left: 50%;
   margin: 0;
   border: 0;

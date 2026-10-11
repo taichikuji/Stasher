@@ -59,21 +59,21 @@ Click a saved tab's link to open it individually; the stash stays saved. To rest
 ```mermaid
 flowchart TD
   accTitle: How Stasher restores tabs
-  accDescr: Opening one tab keeps the stash. Restoring a whole stash opens eligible background tabs, optionally unloads them, groups saved groups with permission, and keeps or removes the stash according to Settings after success. Restoration failures preserve the stash.
+  accDescr: Opening one tab keeps the stash. Restoring a whole stash opens eligible background tabs, groups saved groups with permission, optionally unloads tabs after their navigation commits, and keeps or removes the stash according to Settings after success. Restoration failures preserve the stash.
   Start(["Choose a saved stash"]) --> Whole{"Open the whole stash?"}
   Whole -->|No| Single["Open selected tab"]
   Single --> Keep["Keep saved stash"]
   Whole -->|Yes| Open["Open eligible tabs"]
-  Open --> Unload{"Unload setting enabled?"}
-  Unload -->|Yes| Discard["Unload each background tab; continue if unloading fails"]
-  Unload -->|No| Group{"Saved as a group?"}
-  Discard --> Group
+  Open --> Group{"Saved as a group?"}
   Group -->|No| Ordinary["Keep tabs ungrouped"]
   Group -->|Yes| Access{"Group access granted?"}
   Access -->|No| Ordinary
   Access -->|Yes| Grouped["Group tabs with saved name and color"]
-  Ordinary --> Retain{"Keep after restoration enabled?"}
-  Grouped --> Retain
+  Ordinary --> Unload{"Unload setting enabled?"}
+  Grouped --> Unload
+  Unload -->|Yes| Discard["Wait for committed URLs and titles, then unload background tabs"]
+  Unload -->|No| Retain{"Keep after restoration enabled?"}
+  Discard --> Retain
   Retain -->|Yes| Keep
   Retain -->|No| Remove["Remove saved stash after success"]
 ```
@@ -93,7 +93,7 @@ Open **More actions → Settings**. Changes save automatically on this device an
 | Double-click stash titles to edit | Double-click restores the stash. |
 | Unload restored background tabs until accessed | Restored tabs load normally. |
 
-Startup opening reuses an existing manager or opens one pinned in the background in a normal window, preserving your selected tab. It does not stash tabs. Keeping tabs and unloading apply only to whole-stash restoration; individual saved links keep their usual behavior. Unloading preserves groups, and tabs load when selected. They may briefly start loading before Chrome unloads them; if unloading fails, restoration still finishes and Stasher reports that some tabs remain loaded. Settings are not included in stash exports.
+Startup opening reuses an existing manager or opens one pinned in the background in a normal window, preserving your selected tab. It does not stash tabs. Keeping tabs and unloading apply only to whole-stash restoration; individual saved links keep their usual behavior. Stasher groups restored tabs first and waits for their URLs and titles before unloading them, so tabs retain their destinations and load when selected. Tabs briefly start loading; ones you select or close while waiting are skipped. If navigation is not ready within 30 seconds or unloading fails, restoration still finishes and Stasher reports that some tabs remain loaded. Settings are not included in stash exports.
 
 Stasher opens on demand by default, with search inside the manager and light/dark themes that follow your browser configuration. It is simple on purpose. It's your mess. You deal with it.
 

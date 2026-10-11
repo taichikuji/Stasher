@@ -27,12 +27,28 @@ function eventSlot(listeners, name) {
   };
 }
 
+function createLocks() {
+  const queues = new Map();
+  return {
+    request(name, callback) {
+      const pending = (queues.get(name) ?? Promise.resolve()).then(() => callback());
+      const settled = pending.catch(() => {});
+      queues.set(name, settled);
+      settled.then(() => {
+        if (queues.get(name) === settled) queues.delete(name);
+      });
+      return pending;
+    }
+  };
+}
+
 function createStorage(initial, options = {}) {
   const values = clone(initial);
   const subscribers = new Set();
   const writes = [];
   return {
     writes,
+    locks: createLocks(),
     snapshot: () => clone(values),
     onChanged: {
       addListener: listener => subscribers.add(listener)
@@ -41,6 +57,7 @@ function createStorage(initial, options = {}) {
       async get(query) {
         const keys = typeof query === 'string' ? [query] : Array.isArray(query) ? query : Object.keys(query ?? values);
         if (options.failPreferenceGet && keys.includes('openOnStartup')) throw new Error('Storage read failed');
+        if (keys.includes(options.failStorageGetKey)) throw new Error('Storage read failed');
         return clone(Object.fromEntries(keys.filter(key => key in values || (query && typeof query === 'object' && !Array.isArray(query)))
           .map(key => [key, key in values ? values[key] : query[key]])));
       },
@@ -70,12 +87,13 @@ function runBackground(options = {}) {
   const removedTabs = [];
   const contextMenus = [];
   const errors = [];
-  const storage = createStorage({ stashedItems: options.items ?? [], ...options.preferences }, options);
+  const storage = options.storage ?? createStorage({ stashedItems: options.items ?? [], ...options.preferences }, options);
   const sessionStorage = options.sessionStorage ?? createStorage({});
   storage.session = sessionStorage.local;
   const windows = options.windows ?? [{ id: 4, type: 'normal', focused: true, incognito: false }];
   const permissionRequests = [];
   let groupPermissionGranted = options.groupPermissionGranted !== false;
+  let nextStashId = 1;
 
   const api = {
     runtime: {
@@ -112,8 +130,9 @@ function runBackground(options = {}) {
     tabs: {
       query: async query => {
         if (query.highlighted) return clone(options.highlightedTabs ?? []);
-        if (query.groupId === 7) return clone(options.groupedTabs ?? []);
         if (query.groupId === -1) return clone(options.looseTabs ?? []);
+        if (query.groupId !== undefined) return clone((options.groupedTabs ?? [])
+          .filter(tab => tab.groupId === undefined || tab.groupId === query.groupId));
         if (query.windowId !== undefined) return clone((options.windowTabs ?? []).filter(tab => tab.windowId === undefined || tab.windowId === query.windowId));
         return clone(options.windowTabs ?? []);
       },
@@ -136,17 +155,15 @@ function runBackground(options = {}) {
   const context = vm.createContext({
     chrome: api,
     console: { error: (...args) => errors.push(args) },
-    crypto: { randomUUID: () => 'stash-id' },
-    navigator: {
-      locks: {
-        request: (_name, callback) => callback()
-      }
-    },
+    crypto: { randomUUID: () => nextStashId++ === 1 ? 'stash-id' : `stash-id-${nextStashId - 1}` },
+    navigator: { locks: storage.locks },
     URL
   });
   vm.runInContext(backgroundSource, context);
 
   return {
+    context,
+    storage,
     listeners,
     createdTabs,
     updatedTabs,
@@ -316,11 +333,7 @@ function runManager(initialItems, options = {}) {
     console: { error: (...args) => errors.push(args) },
     crypto: { randomUUID: () => `import-id-${nextImportId++}` },
     document,
-    navigator: {
-      locks: {
-        request: (_name, callback) => callback()
-      }
-    },
+    navigator: { locks: storage.locks },
     sessionStorage: {
       getItem: key => sessionValues.get(key) ?? null,
       setItem: (key, value) => sessionValues.set(key, value),
@@ -567,6 +580,201 @@ test('stashes an eligible mixed selection as ungrouped without closing excluded 
   assert.deepEqual(result.removedTabs, [41, 42]);
 });
 
+test('stashing allows existing and incoming duplicates when the preference is missing, false or invalid', async () => {
+  const saved = { id: 'saved', tabs: [{ title: 'Saved title', url: 'https://one.example' }] };
+  const incoming = [
+    { id: 11, title: 'First title', url: 'https://one.example' },
+    { id: 12, title: 'Second title', url: 'https://one.example' }
+  ];
+  for (const preferences of [{}, { skipDuplicates: false }, { skipDuplicates: 'true' }, { skipDuplicates: 1 }, { skipDuplicates: null }]) {
+    const result = runBackground({ items: [saved], looseTabs: incoming, preferences });
+    await result.listeners.actionClicked({ windowId: 4, groupId: -1 });
+    assert.deepEqual(result.getItems()[0].tabs, incoming.map(({ title, url }) => ({ title, url })));
+    assert.deepEqual(result.getItems().slice(1), [saved]);
+    assert.deepEqual(result.removedTabs, [11, 12]);
+    assert.equal(result.storage.writes.length, 1);
+    assert.deepEqual(Object.keys(result.storage.writes[0]), ['stashedItems']);
+  }
+});
+
+test('skips URLs across all saved stashes and within a new group while preserving order and metadata', async () => {
+  const saved = [
+    { id: 'project', type: 'group', title: 'Different project', color: 'red', timestamp: '2026-01-01', tabs: [
+      { title: 'Custom title', url: 'https://one.example' },
+      { title: 'Intentional existing duplicate', url: 'https://one.example' }
+    ] },
+    { id: 'loose', type: 'loose', tabs: [{ title: 'Saved loose tab', url: 'https://two.example' }] }
+  ];
+  const result = runBackground({ items: saved, preferences: { skipDuplicates: true }, groupedTabs: [
+    { id: 11, title: 'New title', url: 'https://one.example' },
+    { id: 12, title: 'First new tab', url: 'https://new.example' },
+    { id: 13, title: 'New loose title', url: 'https://two.example' },
+    { id: 14, title: 'Repeated new tab', url: 'https://new.example' },
+    { id: 15, title: 'Custom title', url: 'https://last.example' }
+  ] });
+  await result.listeners.actionClicked({ windowId: 4, groupId: 7 });
+  const [newStash, ...existing] = result.getItems();
+  assert.deepEqual(newStash.tabs, [
+    { title: 'First new tab', url: 'https://new.example' },
+    { title: 'Custom title', url: 'https://last.example' }
+  ]);
+  assert.equal(newStash.type, 'group');
+  assert.equal(newStash.title, 'Work');
+  assert.equal(newStash.color, 'blue');
+  assert.deepEqual(existing, saved);
+  assert.deepEqual(result.removedTabs, [11, 12, 13, 14, 15]);
+  assert.deepEqual(Object.keys(result.storage.writes[0]), ['stashedItems']);
+  assert.equal(result.storage.snapshot().skipDuplicates, true);
+});
+
+for (const mode of ['loose', 'group', 'selected group', 'mixed selection', 'group without access', 'right-click']) {
+  test(`skips duplicate URLs when stashing through ${mode}`, async () => {
+    const saved = { id: 'saved', type: 'loose', tabs: [{ title: 'Saved', url: 'https://saved.example' }] };
+    const tabs = [
+      { id: 11, title: 'Duplicate', url: 'https://saved.example', groupId: 7 },
+      { id: 12, title: 'New', url: 'https://new.example', groupId: mode === 'mixed selection' ? -1 : 7 }
+    ];
+    const result = runBackground({
+      items: [saved], preferences: { skipDuplicates: true },
+      looseTabs: tabs, groupedTabs: tabs,
+      highlightedTabs: mode.includes('selection') || mode === 'selected group' ? tabs : [],
+      groupPermissionGranted: mode !== 'group without access',
+      permissionRequestGranted: mode !== 'group without access'
+    });
+    if (mode === 'right-click') {
+      await result.listeners.contextMenuClicked({ menuItemId: 'stash-tab' }, { ...tabs[0], windowId: 4, pinned: true });
+      assert.deepEqual(result.getItems(), [saved]);
+      assert.deepEqual(result.removedTabs, [11]);
+      assert.deepEqual(result.permissionRequests, []);
+      assert.deepEqual(result.storage.writes, []);
+    } else {
+      await result.listeners.actionClicked({ windowId: 4, groupId: mode === 'loose' ? -1 : 7 });
+      assert.deepEqual(result.getItems()[0].tabs, [{ title: 'New', url: 'https://new.example' }]);
+      assert.equal(result.getItems()[0].type, ['loose', 'mixed selection', 'group without access'].includes(mode) ? 'loose' : 'group');
+      assert.deepEqual(result.getItems().slice(1), [saved]);
+      assert.deepEqual(result.removedTabs, [11, 12]);
+    }
+    assert.equal(result.createdTabs.length, 1);
+  });
+}
+
+test('an entirely duplicated stash closes eligible tabs and focuses the manager without writing storage', async () => {
+  const managerUrl = 'chrome-extension://stasher/src/manager/manager.html';
+  const saved = { id: 'saved', tabs: [{ title: 'Saved', url: 'https://one.example' }] };
+  const result = runBackground({ items: [saved], preferences: { skipDuplicates: true }, looseTabs: [
+    { id: 11, title: 'Duplicate', url: 'https://one.example' },
+    { id: 12, title: 'Another duplicate', url: 'https://one.example' },
+    { id: 13, title: 'Pinned duplicate', url: 'https://one.example', pinned: true },
+    { id: 14, url: 'about:blank' },
+    { id: 15, url: managerUrl }
+  ], windowTabs: [{ id: 90, url: managerUrl }] });
+  await result.listeners.actionClicked({ windowId: 4, groupId: -1 });
+  assert.deepEqual(result.getItems(), [saved]);
+  assert.deepEqual(result.storage.writes, []);
+  assert.deepEqual(result.removedTabs, [11, 12]);
+  assert.deepEqual(result.createdTabs, []);
+  assert.deepEqual(result.updatedTabs, [{ id: 90, active: true, pinned: true }]);
+});
+
+test('duplicate checks compare exact URLs, including queries, fragments, protocols, paths and trailing slashes', async () => {
+  const saved = { id: 'saved', tabs: [
+    { title: 'Page', url: 'https://site.example/path?q=1#first' },
+    { title: 'Root', url: 'https://site.example' }
+  ] };
+  const distinct = [
+    'https://site.example/path?q=2#first',
+    'https://site.example/path?q=1#second',
+    'http://site.example/path?q=1#first',
+    'https://site.example/other?q=1#first',
+    'https://site.example/'
+  ];
+  const urls = [saved.tabs[0].url, ...distinct, saved.tabs[1].url];
+  const result = runBackground({ items: [saved], preferences: { skipDuplicates: true },
+    looseTabs: urls.map((url, index) => ({ id: 11 + index, url, title: 'Same title' })) });
+  await result.listeners.actionClicked({ windowId: 4, groupId: -1 });
+  assert.deepEqual(result.getItems()[0].tabs.map(tab => tab.url), distinct);
+  assert.deepEqual(result.removedTabs, urls.map((_, index) => 11 + index));
+});
+
+test('stashing reads the current duplicate preference without restarting the service worker', async () => {
+  const result = runBackground({ looseTabs: [{ id: 11, title: 'Page', url: 'https://one.example' }] });
+  await result.listeners.actionClicked({ windowId: 4, groupId: -1 });
+  const saved = result.getItems();
+  await result.storage.local.set({ skipDuplicates: true });
+  const writes = result.storage.writes.length;
+  await result.listeners.actionClicked({ windowId: 4, groupId: -1 });
+  assert.deepEqual(result.getItems(), saved);
+  assert.equal(result.storage.writes.length, writes);
+  await result.storage.local.set({ skipDuplicates: false });
+  await result.listeners.actionClicked({ windowId: 4, groupId: -1 });
+  assert.equal(result.getItems().length, 2);
+  assert.deepEqual(result.removedTabs, [11, 11, 11]);
+});
+
+test('storage read and save failures keep all selected tabs open, including duplicates', async () => {
+  const saved = { id: 'saved', tabs: [{ title: 'Saved', url: 'https://saved.example' }] };
+  for (const failure of [{ failStorageGetKey: 'skipDuplicates' }, { failStorageGetKey: 'stashedItems' }, { failStorageSetAt: 1 }]) {
+    const result = runBackground({ ...failure, items: [saved], preferences: { skipDuplicates: true }, looseTabs: [
+      { id: 11, title: 'Duplicate', url: 'https://saved.example' },
+      { id: 12, title: 'New', url: 'https://new.example' }
+    ] });
+    await result.listeners.actionClicked({ windowId: 4, groupId: -1 });
+    assert.deepEqual(result.getItems(), [saved]);
+    assert.deepEqual(result.removedTabs, []);
+    assert.equal(result.createdTabs.length, 1);
+    assert.equal(result.errors.length, 1);
+  }
+});
+
+test('concurrent stashing contexts serialize duplicate checks and wait for persistence before closing tabs', async () => {
+  const storage = createStorage({ stashedItems: [], skipDuplicates: true });
+  const first = runBackground({ storage });
+  const second = runBackground({ storage });
+  const get = storage.local.get;
+  const set = storage.local.set;
+  let reads = 0;
+  let release;
+  let started;
+  const writing = new Promise(resolve => { started = resolve; });
+  storage.local.get = async query => { reads++; return get(query); };
+  storage.local.set = async update => {
+    started();
+    await new Promise(resolve => { release = resolve; });
+    return set(update);
+  };
+  const tab = { id: 11, title: 'First', url: 'https://same.example', windowId: 4, groupId: -1 };
+  const firstStash = first.listeners.contextMenuClicked({ menuItemId: 'stash-tab' }, tab);
+  await writing;
+  const secondStash = second.listeners.contextMenuClicked({ menuItemId: 'stash-tab' }, { ...tab, id: 12, title: 'Second' });
+  await new Promise(resolve => setImmediate(resolve));
+  assert.equal(reads, 1);
+  assert.deepEqual(first.removedTabs, []);
+  assert.deepEqual(second.removedTabs, []);
+  release();
+  await Promise.all([firstStash, secondStash]);
+  assert.equal(reads, 2);
+  assert.equal(storage.writes.length, 1);
+  assert.equal(first.getItems().length, 1);
+  assert.deepEqual(first.getItems()[0].tabs, [{ title: 'First', url: tab.url }]);
+  assert.deepEqual(first.removedTabs, [11]);
+  assert.deepEqual(second.removedTabs, [12]);
+});
+
+test('a failed stash write releases the shared lock so the next action can save its copy', async () => {
+  const storage = createStorage({ stashedItems: [], skipDuplicates: true }, { failStorageSetAt: 1 });
+  const first = runBackground({ storage });
+  const second = runBackground({ storage });
+  const tab = { id: 11, title: 'First', url: 'https://same.example', windowId: 4, groupId: -1 };
+  await Promise.all([
+    first.listeners.contextMenuClicked({ menuItemId: 'stash-tab' }, tab),
+    second.listeners.contextMenuClicked({ menuItemId: 'stash-tab' }, { ...tab, id: 12, title: 'Second' })
+  ]);
+  assert.equal(storage.writes.length, 2);
+  assert.deepEqual(first.removedTabs, []);
+  assert.deepEqual(second.removedTabs, [12]);
+  assert.deepEqual(second.getItems()[0].tabs, [{ title: 'Second', url: tab.url }]);
+});
+
 test('undoes explicit stash deletion through the Chromium extension API', async () => {
   const stash = {
     id: 'delete-me',
@@ -758,7 +966,7 @@ test('reports cleanup failure and retains the restored stash', async () => {
   assert.match(result.getElement('notification-message').textContent, /kept to avoid data loss/i);
 });
 
-const preferenceKeys = ['openOnStartup', 'keepAfterRestore', 'editOnDoubleClick', 'unloadAfterRestore'];
+const preferenceKeys = ['openOnStartup', 'keepAfterRestore', 'skipDuplicates', 'editOnDoubleClick', 'unloadAfterRestore'];
 const settingsStash = {
   id: 'settings-stash', type: 'group', title: 'Settings test', color: 'blue',
   tabs: [{ title: 'One', url: 'https://one.example' }, { title: 'Two', url: 'https://two.example' }]
@@ -794,30 +1002,34 @@ test('each switch saves only its preference and survives reopening', async () =>
 });
 
 test('a failed preference save reverts the switch and exposes an inline error', async () => {
-  const result = runManager([], { preferences: { keepAfterRestore: true }, failStorageSetAt: 1 });
-  await result.getElement('settingsBtn').onclick();
-  const input = result.getElement('keepAfterRestore');
-  input.checked = false;
-  await input.trigger('change');
-  assert.equal(input.checked, true);
-  assert.equal(input.disabled, false);
-  assert.equal(result.storage.snapshot().keepAfterRestore, true);
-  assert.equal(result.getElement('settings-error').hidden, false);
-  assert.match(result.getElement('settings-error').textContent, /previous value was restored/);
-  input.checked = false;
-  await input.trigger('change');
-  assert.equal(result.storage.snapshot().keepAfterRestore, false);
-  assert.equal(result.getElement('settings-error').hidden, true);
+  for (const key of preferenceKeys) {
+    const result = runManager([], { preferences: { [key]: true }, failStorageSetAt: 1 });
+    await result.getElement('settingsBtn').onclick();
+    const input = result.getElement(key);
+    input.checked = false;
+    await input.trigger('change');
+    assert.equal(input.checked, true);
+    assert.equal(input.disabled, false);
+    assert.equal(result.storage.snapshot()[key], true);
+    assert.equal(result.getElement('settings-error').hidden, false);
+    assert.match(result.getElement('settings-error').textContent, /previous value was restored/);
+    input.checked = false;
+    await input.trigger('change');
+    assert.equal(result.storage.snapshot()[key], false);
+    assert.equal(result.getElement('settings-error').hidden, true);
+  }
 });
 
 test('settings read failure leaves controls disabled and prevents restoration', async () => {
-  const result = runManager([settingsStash], { failPreferenceGet: true });
-  await result.getElement('settingsBtn').onclick();
-  for (const key of preferenceKeys) assert.equal(result.getElement(key).disabled, true);
-  assert.equal(result.getElement('settings-error').hidden, false);
-  await vm.runInContext(`restoreGroup(${JSON.stringify(settingsStash)})`, result.context);
-  assert.deepEqual(result.createdTabs, []);
-  assert.deepEqual(result.getItems(), [settingsStash]);
+  for (const failure of [{ failPreferenceGet: true }, { failStorageGetKey: 'skipDuplicates' }]) {
+    const result = runManager([settingsStash], failure);
+    await result.getElement('settingsBtn').onclick();
+    for (const key of preferenceKeys) assert.equal(result.getElement(key).disabled, true);
+    assert.equal(result.getElement('settings-error').hidden, false);
+    await vm.runInContext(`restoreGroup(${JSON.stringify(settingsStash)})`, result.context);
+    assert.deepEqual(result.createdTabs, []);
+    assert.deepEqual(result.getItems(), [settingsStash]);
+  }
 });
 
 test('open settings dialogs synchronize independent preferences, including invalid values and removals', async () => {
@@ -828,11 +1040,19 @@ test('open settings dialogs synchronize independent preferences, including inval
   first.getElement('keepAfterRestore').checked = true;
   await first.getElement('keepAfterRestore').trigger('change');
   assert.equal(second.getElement('keepAfterRestore').checked, true);
-  await storage.local.set({ keepAfterRestore: 'true', openOnStartup: true });
+  first.getElement('skipDuplicates').checked = true;
+  await first.getElement('skipDuplicates').trigger('change');
+  assert.equal(second.getElement('skipDuplicates').checked, true);
+  assert.equal(second.getElement('keepAfterRestore').checked, true);
+  await storage.local.set({ keepAfterRestore: 'true', openOnStartup: true, skipDuplicates: 'true' });
   for (const result of [first, second]) {
     assert.equal(result.getElement('keepAfterRestore').checked, false);
     assert.equal(result.getElement('openOnStartup').checked, true);
+    assert.equal(result.getElement('skipDuplicates').checked, false);
   }
+  await storage.local.set({ skipDuplicates: true });
+  await storage.local.remove('skipDuplicates');
+  assert.equal(second.getElement('skipDuplicates').checked, false);
   await storage.local.remove('openOnStartup');
   assert.equal(second.getElement('openOnStartup').checked, false);
   assert.deepEqual(storage.snapshot().stashedItems, [settingsStash]);
@@ -902,6 +1122,31 @@ test('title double-click reads the current preference and focuses the existing e
   await header.children.find(child => child.className.includes('group-badge')).trigger('dblclick');
   assert.equal(result.createdTabs.length, 2);
   assert.deepEqual(result.getItems(), []);
+});
+
+test('restashing restored tabs respects duplicate skipping with Keep tabs after restoration on or off', async () => {
+  for (const keepAfterRestore of [true, false]) {
+    const storage = createStorage({ stashedItems: [settingsStash], keepAfterRestore, skipDuplicates: true });
+    const manager = runManager([], { storage });
+    await vm.runInContext(`restoreGroup(${JSON.stringify(settingsStash)})`, manager.context);
+    assert.deepEqual(manager.getItems(), keepAfterRestore ? [settingsStash] : []);
+    const writesAfterRestore = storage.writes.length;
+    const background = runBackground({ storage,
+      group: { title: 'Renamed browser group', color: 'red' },
+      groupedTabs: manager.createdTabs.map(tab => ({ ...manager.getTab(tab.id), windowId: 4 }))
+    });
+    await background.listeners.actionClicked({ windowId: 4, groupId: 8 });
+    assert.equal(background.getItems().length, 1);
+    if (keepAfterRestore) {
+      assert.deepEqual(background.getItems(), [settingsStash]);
+      assert.equal(storage.writes.length, writesAfterRestore);
+    } else {
+      assert.deepEqual(background.getItems()[0].tabs.map(tab => tab.url), settingsStash.tabs.map(tab => tab.url));
+      assert.equal(background.getItems()[0].title, 'Renamed browser group');
+      assert.equal(storage.writes.length, writesAfterRestore + 1);
+    }
+    assert.deepEqual(background.removedTabs, manager.createdTabs.map(tab => tab.id));
+  }
 });
 
 for (const keepAfterRestore of [false, true]) {
@@ -1220,6 +1465,26 @@ test('imports compatible Stasher JSON while de-duplicating stash IDs', async () 
     title: 'New',
     url: 'https://new.example'
   });
+});
+
+test('duplicate skipping leaves URLs intact when importing JSON backups or OneTab exports', async () => {
+  const saved = { id: 'saved', tabs: [{ title: 'Saved', url: 'https://one.example' }] };
+  const tabs = [
+    { title: 'First', url: 'https://one.example' },
+    { title: 'Second', url: 'https://one.example' }
+  ];
+  for (const file of [
+    new File([JSON.stringify([{ id: 'imported', tabs }])], 'backup.json'),
+    new File(['https://one.example | First\nhttps://one.example | Second'], 'onetab.txt')
+  ]) {
+    const result = runManager([saved], { preferences: { skipDuplicates: true } });
+    result.context.file = file;
+    await vm.runInContext('handleImport(file)', result.context);
+    assert.equal(result.getItems().length, 2);
+    assert.deepEqual(result.getItems()[0].tabs, tabs);
+    assert.deepEqual(result.getItems()[1], saved);
+    assert.equal(result.storage.snapshot().skipDuplicates, true);
+  }
 });
 
 test('rejects Stasher JSON over the item limit', async () => {

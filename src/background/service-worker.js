@@ -87,9 +87,19 @@ chrome.runtime.onStartup.addListener(async () => {
  */
 // The shared lock serializes stashes that arrive from separate browser events.
 const saveToStorage = (dataItem) => navigator.locks.request('stasher-storage', async () => {
-  const result = await chrome.storage.local.get({ [CONFIG.STORAGE_KEY]: [] });
+  const result = await chrome.storage.local.get({ [CONFIG.STORAGE_KEY]: [], skipDuplicates: false });
   const items = Array.isArray(result[CONFIG.STORAGE_KEY]) ? result[CONFIG.STORAGE_KEY] : [];
-  await chrome.storage.local.set({ [CONFIG.STORAGE_KEY]: [dataItem, ...items] });
+  let tabs = dataItem.tabs;
+  if (result.skipDuplicates === true) {
+    const urls = new Set(items.flatMap(item => Array.isArray(item?.tabs) ? item.tabs.map(tab => tab?.url) : []));
+    tabs = tabs.filter(tab => {
+      if (urls.has(tab.url)) return false;
+      urls.add(tab.url);
+      return true;
+    });
+  }
+  if (tabs.length === 0) return;
+  await chrome.storage.local.set({ [CONFIG.STORAGE_KEY]: [{ ...dataItem, tabs }, ...items] });
 });
 
 chrome.runtime.onInstalled.addListener(() => {

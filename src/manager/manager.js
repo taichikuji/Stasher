@@ -17,6 +17,7 @@ const CONFIG = {
 const PREFERENCE_DEFAULTS = {
   openOnStartup: false,
   keepAfterRestore: false,
+  skipDuplicates: false,
   editOnDoubleClick: false,
   unloadAfterRestore: false
 };

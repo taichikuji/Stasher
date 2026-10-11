@@ -29,7 +29,7 @@ Right-click a tab and choose **Stash this tab**, or click the Stasher icon / pre
 ```mermaid
 flowchart TD
   accTitle: How Stasher saves tabs
-  accDescr: Stash one chosen tab, multiple selected tabs, the active tab's group, or loose tabs. Filter excluded tabs, save locally, open the manager, and close saved tabs. If none are eligible, only open the manager.
+  accDescr: Stash one chosen tab, multiple selected tabs, the active tab's group, or loose tabs. Filter excluded tabs and optionally skip duplicate URLs, save new tabs locally, open the manager, and close eligible tabs including skipped duplicates. If none are eligible, only open the manager.
   Start(["Start stashing"]) --> Single{"Stash this tab?"}
   Single -->|Yes| Chosen["Choose that tab"]
   Single -->|No| Selected{"Multiple tabs selected?"}
@@ -43,12 +43,19 @@ flowchart TD
   Loose --> Filter
   Filter --> Eligible{"Any eligible tabs?"}
   Eligible -->|No| ManagerOnly["Open or focus manager; leave tabs open"]
-  Eligible -->|Yes| Save["Save tabs locally"]
+  Eligible -->|Yes| Duplicates{"Skip duplicate tabs enabled?"}
+  Duplicates -->|No| Save["Save tabs locally"]
+  Duplicates -->|Yes| Unique["Skip URLs already saved or repeated in this action"]
+  Unique --> New{"Any new URLs?"}
+  New -->|Yes| Save
+  New -->|No| Manager
   Save --> Manager["Open or focus manager"]
-  Manager --> Close["Close saved tabs"]
+  Manager --> Close["Close eligible tabs, including skipped duplicates"]
 ```
 
-Stasher accepts `http:`, `https:`, and `chrome-extension:` URLs. It skips its own manager, new-tab and blank pages, invalid URLs, and other URL schemes. Pinned tabs stay open unless you explicitly right-click one and choose **Stash this tab**. Tabs are saved before they are closed; if saving fails, they stay open.
+Stasher accepts `http:`, `https:`, and `chrome-extension:` URLs. It skips its own manager, new-tab and blank pages, invalid URLs, and other URL schemes. Pinned tabs stay open unless you explicitly right-click one and choose **Stash this tab**. Tabs are saved before they are closed; if reading or saving fails, they stay open.
+
+Enable **Skip duplicate tabs when stashing** to keep one saved copy of each exact URL across all stashes and within each new stashing action. The first occurrence is kept; different queries, fragments, protocols, or paths count as distinct URLs. Skipped browser tabs still close because their URLs are already saved. If every tab is duplicated, Stasher opens the manager without creating an empty stash or writing storage. Existing duplicates, imported backups, and saved titles are left intact. This works independently of **Keep tabs after restoration** and prevents retained tabs from being saved again after restoration.
 
 Tab-group access is optional and is requested when you use the icon or shortcut. With access, Stasher saves the group name and color when the eligible tabs all belong to one group. A selection spanning groups or including loose tabs is saved as a loose stash. Right-clicking a single tab also saves it as a loose stash. If access is declined, tabs are still saved without group metadata; the next icon or shortcut use requests access again.
 
@@ -84,12 +91,13 @@ In the manager, search stash names, tab titles, and URLs, rename stashes, change
 
 ### Settings
 
-Open **More actions → Settings**. Changes save automatically on this device and synchronize between open manager tabs. All four switches default off:
+Open **More actions → Settings**. Changes save automatically on this device and synchronize between open manager tabs. All five switches default off:
 
 | Setting | Default behavior |
 | --- | --- |
 | Open Stasher on browser startup | Does not open automatically. |
 | Keep tabs after restoration | Removes the saved stash after successful restoration. |
+| Skip duplicate tabs when stashing | Duplicate tabs are allowed. |
 | Double-click stash titles to edit | Double-click restores the stash. |
 | Unload restored background tabs until accessed | Restored tabs load normally. |
 

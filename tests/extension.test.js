@@ -1783,6 +1783,88 @@ test('an Undo in progress blocks duplicate clicks and cannot expire during a slo
   assert.deepEqual(result.getItems(), [stash]);
 });
 
+function runCats(reducedMotion = false) {
+  const result = runManager([]);
+  const cats = [];
+  Object.assign(result.context, {
+    innerWidth: 800,
+    innerHeight: 600,
+    matchMedia: () => ({ matches: reducedMotion })
+  });
+  result.context.document.body = {
+    append(cat) {
+      cat.getBoundingClientRect = () => ({ left: 384, right: 416, top: 284, bottom: 316 });
+      cat.remove = () => { cat.removed = true; };
+      cat.animations = [];
+      cat.animate = (frames, options) => {
+        const animation = { frames: clone(frames), options: clone(options) };
+        cat.animations.push(animation);
+        return animation;
+      };
+      cats.push(cat);
+    }
+  };
+  result.context.document.querySelector = selector => cats.find(cat =>
+    !cat.removed && (selector === '.pet-cat' || !cat.classList.contains('leaving')));
+  return { ...result, cats, spawn: () => result.getElement('catBtn').onclick() };
+}
+
+test('cats stay briefly, then run straight off one of the four screen edges before removal', async () => {
+  const destinations = [[0, -316], [-416, 0], [0, 316], [416, 0]];
+  for (const [direction, destination] of destinations.entries()) {
+    const result = runCats();
+    result.spawn();
+    vm.runInContext(`Math.random = () => ${(direction + 0.5) / 4}`, result.context);
+    const [cat] = result.cats;
+    await result.advanceTime(2999);
+    assert.equal(cat.removed, undefined);
+    assert.equal(cat.animations.length, 0);
+    await result.advanceTime(1);
+    assert.equal(cat.removed, undefined);
+    const [animation] = cat.animations;
+    assert.deepEqual(animation.frames.translate[1].split(' ').map(parseFloat), destination);
+    assert.equal(animation.options.easing, 'linear');
+    assert.equal(animation.options.duration, 600);
+    animation.onfinish();
+    assert.equal(cat.removed, true);
+  }
+});
+
+test('leaving cats do not block later cats and new clicks reset only the pending departures', async () => {
+  const result = runCats();
+  result.spawn();
+  result.spawn();
+  result.spawn();
+  await result.advanceTime(3000);
+  assert.equal(result.cats[0].animations.length, 1);
+  assert.equal(result.cats[1].animations.length, 0);
+  await result.advanceTime(100);
+  assert.equal(result.cats[0].animations.length, 1);
+  assert.equal(result.cats[1].animations.length, 1);
+  result.spawn();
+  await result.advanceTime(2999);
+  assert.equal(result.cats[2].animations.length, 0);
+  assert.equal(result.cats[3].animations.length, 0);
+  await result.advanceTime(1);
+  assert.equal(result.cats[2].animations.length, 1);
+  assert.equal(result.cats[3].animations.length, 0);
+  await result.advanceTime(100);
+  assert.equal(result.cats[3].animations.length, 1);
+  for (const cat of result.cats) cat.animations[0].onfinish();
+  await result.advanceTime(100);
+  assert(result.cats.every(cat => cat.removed && cat.animations.length === 1));
+});
+
+test('cats honor reduced motion and are cleaned up if an animation is cancelled', async () => {
+  const result = runCats(true);
+  result.spawn();
+  await result.advanceTime(3000);
+  const [cat] = result.cats;
+  assert.equal(cat.animations[0].options.duration, 0);
+  cat.animations[0].oncancel();
+  assert.equal(cat.removed, true);
+});
+
 test('manifest defines a Chromium MV3 service worker', () => {
   const manifest = JSON.parse(readFileSync(join(root, 'manifest.json'), 'utf8'));
   const managerHtml = readFileSync(join(root, 'src/manager/manager.html'), 'utf8');

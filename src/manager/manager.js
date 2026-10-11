@@ -860,9 +860,18 @@ async function savePreference(key) {
   let timeout;
 
   function shoo() {
-    const cat = document.querySelector('.pet-cat');
+    const cat = document.querySelector('.pet-cat:not(.leaving)');
     if (!cat) return;
-    cat.remove();
+    cat.classList.add('leaving');
+    const { left, right, top, bottom } = cat.getBoundingClientRect();
+    const directions = [[0, -bottom], [-right, 0], [0, innerHeight - top], [innerWidth - left, 0]];
+    const [x, y] = directions[Math.floor(Math.random() * directions.length)];
+    const animation = cat.animate({ translate: ['0 0', `${x}px ${y}px`] }, {
+      duration: matchMedia('(prefers-reduced-motion: reduce)').matches ? 0 : 600,
+      easing: 'linear',
+      fill: 'forwards'
+    });
+    animation.onfinish = animation.oncancel = () => cat.remove();
     timeout = setTimeout(shoo, 100);
   }
 

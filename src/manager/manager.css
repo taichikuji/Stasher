@@ -586,6 +586,7 @@ button.secondary {
   border-radius: 12px;
   background: var(--surface0);
   cursor: pointer;
+  transition: background-color 0.15s, border-color 0.15s;
 }
 
 .settings-switch::before {
@@ -595,6 +596,7 @@ button.secondary {
   height: 16px;
   border-radius: 50%;
   background: var(--subtext0);
+  transition: transform 0.15s, background-color 0.15s;
 }
 
 .settings-switch:checked { background: var(--blue); border-color: var(--blue); }

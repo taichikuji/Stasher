@@ -293,11 +293,6 @@ button.danger:hover { background-color: color-mix(in srgb, var(--red) 12%, trans
 
 #catBtn { font-size: 18px; }
 
-#catBtn:hover {
-  background: var(--surface1);
-  transform: scale(1.1);
-}
-
 .pet-cat {
   position: fixed;
   z-index: 999;

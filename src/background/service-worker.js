@@ -51,10 +51,8 @@ const openStartupManager = async window => {
     chrome.windows.onCreated.removeListener(openStartupManager);
     await chrome.storage.session.remove('awaitingStartupWindow');
     // Session-restored tabs may expose only pendingUrl while loading.
-    const windows = await chrome.windows.getAll({ windowTypes: ['normal'] });
-    const tabs = await chrome.tabs.query({});
-    const existing = tabs.find(tab =>
-      windows.some(w => w.id === tab.windowId && !w.incognito) &&
+    const tabs = await chrome.tabs.query({ windowType: 'normal' });
+    const existing = tabs.find(tab => !tab.incognito &&
       (tab.url === MANAGER_URL || tab.pendingUrl === MANAGER_URL));
     if (existing) await chrome.tabs.update(existing.id, { pinned: true });
     else await openManager(window.id, false);

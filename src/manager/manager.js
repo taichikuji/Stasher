@@ -488,16 +488,15 @@ async function restoreGroup(item, preferences) {
     const canRestoreGroup = item.type === 'group' &&
       await chrome.permissions.contains({ permissions: ['tabGroups'] });
 
-    // 1. Create Tabs
-    const created = await Promise.all(tabs.map(async t => {
+    // 1. Create tabs in order so a failed restore leaves no requests running.
+    for (const t of tabs) {
       const tab = await chrome.tabs.create({ url: t.url, active: false });
       tabIds.push(tab.id);
-      return tab;
-    }));
+    }
 
     if (canRestoreGroup) {
       // 2. Create Group
-      const groupId = await chrome.tabs.group({ tabIds: created.map(tab => tab.id) });
+      const groupId = await chrome.tabs.group({ tabIds });
 
       // 3. Apply Properties
       await chrome.tabGroups.update(groupId, {
@@ -608,8 +607,9 @@ function showNotification(message) {
   elements.notificationMessage.textContent = message;
   elements.undoBtn.hidden = state.undoStack.length === 0;
   elements.notification.showPopover();
-  state.notificationTimeout = setTimeout(dismissNotification,
-    state.undoStack.length ? CONFIG.UNDO_TIMEOUT_MS : CONFIG.NOTIFICATION_TIMEOUT_MS);
+  state.notificationTimeout = setTimeout(() => {
+    if (!elements.undoBtn.disabled) dismissNotification();
+  }, state.undoStack.length ? CONFIG.UNDO_TIMEOUT_MS : CONFIG.NOTIFICATION_TIMEOUT_MS);
 }
 
 function dismissNotification() {

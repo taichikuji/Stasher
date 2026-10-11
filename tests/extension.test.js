@@ -134,6 +134,8 @@ function runBackground(options = {}) {
         if (query.groupId !== undefined) return clone((options.groupedTabs ?? [])
           .filter(tab => tab.groupId === undefined || tab.groupId === query.groupId));
         if (query.windowId !== undefined) return clone((options.windowTabs ?? []).filter(tab => tab.windowId === undefined || tab.windowId === query.windowId));
+        if (query.windowType) return clone((options.windowTabs ?? []).filter(tab =>
+          windows.some(window => window.id === tab.windowId && window.type === query.windowType)));
         return clone(options.windowTabs ?? []);
       },
       create: async details => {
@@ -907,6 +909,32 @@ test('suppresses concurrent restores of the same stash', async () => {
   assert.deepEqual(result.getItems(), []);
 });
 
+test('a restore keeps its guard while tab creation is pending, even when another creation fails', async () => {
+  const stash = { id: 'partial-restore', type: 'loose', tabs: [
+    { title: 'One', url: 'https://one.example' },
+    { title: 'Two', url: 'https://two.example' }
+  ] };
+  const result = runManager([stash]);
+  const create = result.context.chrome.tabs.create;
+  let release;
+  let calls = 0;
+  result.context.chrome.tabs.create = async details => {
+    if (++calls > 1) throw new Error('Tab creation failed');
+    await new Promise(resolve => { release = resolve; });
+    return create(details);
+  };
+  const restoring = vm.runInContext(`restoreGroup(${JSON.stringify(stash)})`, result.context);
+  await new Promise(setImmediate);
+  const callsBeforeRetry = calls;
+  await vm.runInContext(`restoreGroup(${JSON.stringify(stash)})`, result.context);
+  assert.equal(calls, callsBeforeRetry);
+  release();
+  await restoring;
+  assert.equal(result.createdTabs.length, 1);
+  assert.deepEqual(result.getItems(), [stash]);
+  assert.match(result.getElement('notification-message').textContent, /Tabs were opened.*kept/);
+});
+
 test('reports cleanup failure and retains the restored stash', async () => {
   const stash = {
     id: 'cleanup-fails',
@@ -1175,14 +1203,17 @@ test('startup waits once for a normal window and ignores popup and incognito win
   assert.equal(result.listeners.windowCreated, undefined);
 });
 
-test('startup ignores managers in incognito windows', async () => {
-  const result = runBackground({ preferences: { openOnStartup: true }, windows: [
-    { id: 4, type: 'normal', focused: true }, { id: 9, type: 'normal', incognito: true }
-  ], windowTabs: [{ id: 55, windowId: 9, url: 'chrome-extension://stasher/src/manager/manager.html' }] });
-  await result.listeners.startup();
-  assert.equal(result.createdTabs.length, 1);
-  assert.equal(result.createdTabs[0].windowId, 4);
-  assert.deepEqual(result.updatedTabs, []);
+test('startup ignores managers in popup and incognito windows', async () => {
+  for (const excludedWindow of [{ id: 9, type: 'popup' }, { id: 9, type: 'normal', incognito: true }]) {
+    const result = runBackground({ preferences: { openOnStartup: true }, windows: [
+      { id: 4, type: 'normal', focused: true }, excludedWindow
+    ], windowTabs: [{ id: 55, windowId: 9, incognito: excludedWindow.incognito === true,
+      url: 'chrome-extension://stasher/src/manager/manager.html' }] });
+    await result.listeners.startup();
+    assert.equal(result.createdTabs.length, 1);
+    assert.equal(result.createdTabs[0].windowId, 4);
+    assert.deepEqual(result.updatedTabs, []);
+  }
 });
 
 test('startup does not open with an unreadable preference', async () => {
@@ -1725,7 +1756,9 @@ test('a failed Undo stays available for retry in the same notification', async (
 
 test('an Undo in progress blocks duplicate clicks and cannot expire during a slow save', async () => {
   const stash = { id: 'slow', tabs: [] };
-  const result = runManager([stash]);
+  const earlier = { id: 'earlier', tabs: [] };
+  const result = runManager([earlier, stash]);
+  await vm.runInContext("deleteStash('earlier')", result.context);
   await vm.runInContext("deleteStash('slow')", result.context);
   const set = result.context.chrome.storage.local.set;
   let finish;
@@ -1736,13 +1769,18 @@ test('an Undo in progress blocks duplicate clicks and cannot expire during a slo
   const pending = result.getElement('notification-undo').onclick();
   while (!finish) await new Promise(resolve => setImmediate(resolve));
   await result.getElement('notification-undo').onclick();
+  await vm.runInContext("showNotification('Another message')", result.context);
   await result.advanceTime(6000);
   assert.equal(result.getElement('notification').popoverOpen, true);
   assert.equal(result.getElement('notification-undo').disabled, true);
   finish();
   await pending;
   assert.deepEqual(result.getItems(), [stash]);
+  assert.equal(result.getElement('notification-undo').hidden, false);
+  await result.advanceTime(5000);
   assert.equal(result.getElement('notification').popoverOpen, false);
+  await result.getElement('notification-undo').onclick();
+  assert.deepEqual(result.getItems(), [stash]);
 });
 
 test('manifest defines a Chromium MV3 service worker', () => {

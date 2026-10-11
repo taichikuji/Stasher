@@ -18,8 +18,7 @@ const PREFERENCE_DEFAULTS = {
   openOnStartup: false,
   keepAfterRestore: false,
   skipDuplicates: false,
-  editOnDoubleClick: false,
-  unloadAfterRestore: false
+  editOnDoubleClick: false
 };
 
 // State Management
@@ -508,20 +507,13 @@ async function restoreGroup(item, preferences) {
       });
     }
 
-    // Group first, then wait for committed navigation before unloading (as OneTab does).
-    const unloaded = preferences.unloadAfterRestore
-      ? await Promise.all(created.map(tab => unloadRestoredTab(tab.id)))
-      : [];
-
     // 4. Cleanup Storage. Await this so a successful restore cannot silently
     // leave a second, apparently unrestored copy behind.
     if (!preferences.keepAfterRestore) {
       const deleted = await deleteStash(item.id, { undo: false });
       if (!deleted) throw new Error('Restored stash was not found during cleanup');
     }
-    showNotification(unloaded.includes(false)
-      ? 'Restored your tabs. Some tabs could not be unloaded and remain loaded.'
-      : 'Restored your tabs.');
+    showNotification('Restored your tabs.');
 
   } catch (error) {
     console.error("Error restoring group:", error);
@@ -531,54 +523,6 @@ async function restoreGroup(item, preferences) {
   } finally {
     state.restoringIds.delete(item.id);
   }
-}
-
-function unloadRestoredTab(tabId) {
-  return new Promise(resolve => {
-    let finished = false;
-    let checking = false;
-    let checkAgain = false;
-    const finish = success => {
-      if (finished) return;
-      finished = true;
-      clearTimeout(timeout);
-      chrome.tabs.onUpdated.removeListener(onUpdated);
-      chrome.tabs.onActivated.removeListener(onActivated);
-      chrome.tabs.onRemoved.removeListener(onRemoved);
-      resolve(success);
-    };
-    const check = async () => {
-      if (finished) return;
-      if (checking) { checkAgain = true; return; }
-      checking = true;
-      try {
-        const tab = await chrome.tabs.get(tabId);
-        if (finished) return;
-        if (tab.active || tab.discarded) { finish(true); return; }
-        // Discarding a pending navigation can leave an untitled, blank tab.
-        if (tab.pendingUrl || !isAllowedTabUrl(tab.url) || !tab.title) return;
-        const discarded = await chrome.tabs.discard(tabId);
-        finish(discarded?.discarded === true);
-      } catch (error) {
-        if (!finished) {
-          console.error('Error unloading restored tab:', error);
-          finish(false);
-        }
-      } finally {
-        checking = false;
-        if (checkAgain && !finished) { checkAgain = false; check(); }
-      }
-    };
-    const onUpdated = id => { if (id === tabId) return check(); };
-    const onActivated = info => { if (info.tabId === tabId) finish(true); };
-    const onRemoved = id => { if (id === tabId) finish(true); };
-    const timeout = setTimeout(() => finish(false), 30000);
-    // Subscribe before reading so a fast title or URL update cannot be missed.
-    chrome.tabs.onUpdated.addListener(onUpdated);
-    chrome.tabs.onActivated.addListener(onActivated);
-    chrome.tabs.onRemoved.addListener(onRemoved);
-    check();
-  });
 }
 
 async function deleteStash(id, { undo = true } = {}) {

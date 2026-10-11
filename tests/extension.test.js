@@ -235,18 +235,7 @@ function runManager(initialItems, options = {}) {
   const errors = [];
   const groupedTabs = [];
   const updatedGroups = [];
-  const discardedTabs = [];
-  const tabEvents = [];
   const tabs = new Map();
-  const tabListeners = Object.fromEntries(['onUpdated', 'onActivated', 'onRemoved'].map(name => {
-    const listeners = new Set();
-    return [name, {
-      addListener: listener => listeners.add(listener),
-      removeListener: listener => listeners.delete(listener),
-      emit: (...args) => Promise.all([...listeners].map(listener => listener(...args))),
-      get size() { return listeners.size; }
-    }];
-  }));
   const storage = options.storage ?? createStorage({ stashedItems: initialItems, ...options.preferences }, options);
   let nextTabId = 20;
   let nextImportId = 1;
@@ -264,37 +253,18 @@ function runManager(initialItems, options = {}) {
       contains: async () => options.groupPermissionGranted !== false
     },
     tabs: {
-      ...tabListeners,
       create: async details => {
         if (options.failTabCreation) throw new Error('Tab creation failed');
         const tab = { id: nextTabId++, ...clone(details) };
         createdTabs.push(tab);
-        tabEvents.push(['create', tab.id]);
         const current = { ...tab, groupId: -1, discarded: false, title: `Restored ${details.url}` };
         if (options.pendingNavigation) Object.assign(current, { url: 'about:blank', pendingUrl: details.url, title: '' });
         tabs.set(tab.id, current);
         return clone(current);
       },
-      get: async id => {
-        if (!tabs.has(id) || options.failTabGet) throw new Error('Tab not found');
-        return clone(tabs.get(id));
-      },
-      discard: async id => {
-        discardedTabs.push(id);
-        tabEvents.push(['discard', id]);
-        if (options.failTabDiscard === true || options.failTabDiscard === id) throw new Error('Tab discard failed');
-        if (options.emptyTabDiscard) return undefined;
-        const tab = tabs.get(id);
-        assert.equal(tab.active, false, 'Only background tabs may be discarded');
-        assert.ok(tab.url && tab.url !== 'about:blank' && !tab.pendingUrl && tab.title,
-          'Discard only after navigation commits and a title is available');
-        tab.discarded = true;
-        return clone(tab);
-      },
       group: async details => {
         if (options.failTabGrouping) throw new Error('Tab grouping failed');
         groupedTabs.push(clone(details));
-        tabEvents.push(['group', ...details.tabIds]);
         for (const id of details.tabIds) tabs.get(id).groupId = 8;
         return 8;
       }
@@ -354,22 +324,7 @@ function runManager(initialItems, options = {}) {
     errors,
     groupedTabs,
     updatedGroups,
-    discardedTabs,
-    tabEvents,
-    tabListeners,
     getTab: id => clone(tabs.get(id)),
-    async emitTabUpdate(id, change) {
-      Object.assign(tabs.get(id), change);
-      await tabListeners.onUpdated.emit(id, change, clone(tabs.get(id)));
-    },
-    async activateTab(id) {
-      tabs.get(id).active = true;
-      await tabListeners.onActivated.emit({ tabId: id });
-    },
-    async closeTab(id) {
-      tabs.delete(id);
-      await tabListeners.onRemoved.emit(id, { isWindowClosing: false });
-    },
     storage,
     async advanceTime(milliseconds) {
       const end = time + milliseconds;
@@ -923,13 +878,15 @@ test('keeps a stash when restoration fails before cleanup', async () => {
     tabs: [{ title: 'One', url: 'https://one.example' }]
   };
 
-  for (const failure of ['failTabCreation', 'failTabGrouping', 'failGroupUpdate']) {
-    const result = runManager([stash], { [failure]: true });
+  for (const keepAfterRestore of [false, true]) {
+    for (const failure of ['failTabCreation', 'failTabGrouping', 'failGroupUpdate']) {
+      const result = runManager([stash], { [failure]: true, preferences: { keepAfterRestore } });
 
-    await vm.runInContext(`restoreGroup(${JSON.stringify(stash)})`, result.context);
+      await vm.runInContext(`restoreGroup(${JSON.stringify(stash)})`, result.context);
 
-    assert.deepEqual(result.getItems(), [stash]);
-    assert.equal(result.errors.length, 1);
+      assert.deepEqual(result.getItems(), [stash]);
+      assert.equal(result.errors.length, 1);
+    }
   }
 });
 
@@ -966,7 +923,7 @@ test('reports cleanup failure and retains the restored stash', async () => {
   assert.match(result.getElement('notification-message').textContent, /kept to avoid data loss/i);
 });
 
-const preferenceKeys = ['openOnStartup', 'keepAfterRestore', 'skipDuplicates', 'editOnDoubleClick', 'unloadAfterRestore'];
+const preferenceKeys = ['openOnStartup', 'keepAfterRestore', 'skipDuplicates', 'editOnDoubleClick'];
 const settingsStash = {
   id: 'settings-stash', type: 'group', title: 'Settings test', color: 'blue',
   tabs: [{ title: 'One', url: 'https://one.example' }, { title: 'Two', url: 'https://two.example' }]
@@ -1150,135 +1107,23 @@ test('restashing restored tabs respects duplicate skipping with Keep tabs after 
 });
 
 for (const keepAfterRestore of [false, true]) {
-  for (const unloadAfterRestore of [false, true]) {
-    test(`whole-stash restore honors keep=${keepAfterRestore}, unload=${unloadAfterRestore}`, async () => {
-      const result = runManager([settingsStash]);
-      await result.storage.local.set({ keepAfterRestore, unloadAfterRestore });
-      await vm.runInContext(`restoreGroup(${JSON.stringify(settingsStash)})`, result.context);
-      assert.deepEqual(result.getItems(), keepAfterRestore ? [settingsStash] : []);
-      assert.deepEqual(result.discardedTabs, unloadAfterRestore ? [20, 21] : []);
-      assert.deepEqual(result.groupedTabs, [{ tabIds: [20, 21] }]);
-      assert.deepEqual(result.updatedGroups, [[8, { title: settingsStash.title, color: 'blue', collapsed: false }]]);
-      if (unloadAfterRestore) {
-        for (const id of [20, 21]) {
-          assert.ok(result.tabEvents.findIndex(event => event[0] === 'discard' && event[1] === id) >
-            result.tabEvents.findIndex(event => event[0] === 'group'));
-        }
-      }
+  test(`whole-stash restore loads tabs normally and honors keep=${keepAfterRestore}`, async () => {
+    const result = runManager([settingsStash], {
+      pendingNavigation: true,
+      preferences: { keepAfterRestore, unloadAfterRestore: true }
     });
-  }
-}
-
-test('discard failures are nonfatal, preserve grouping and report loaded tabs with keep on or off', async () => {
-  for (const keepAfterRestore of [false, true]) {
-    for (const failure of [{ failTabDiscard: 20 }, { emptyTabDiscard: true }]) {
-      const result = runManager([settingsStash], { ...failure, preferences: { keepAfterRestore, unloadAfterRestore: true } });
-      await vm.runInContext(`restoreGroup(${JSON.stringify(settingsStash)})`, result.context);
-      assert.deepEqual(result.discardedTabs, [20, 21]);
-      assert.deepEqual(result.groupedTabs, [{ tabIds: [20, 21] }]);
-      assert.deepEqual(result.getItems(), keepAfterRestore ? [settingsStash] : []);
-      assert.match(result.getElement('notification-message').textContent, /Some tabs.*remain loaded/);
-    }
-  }
-});
-
-test('unloading waits for committed navigation and titles, after grouping', async () => {
-  const result = runManager([settingsStash], { pendingNavigation: true, preferences: { unloadAfterRestore: true } });
-  const restoring = vm.runInContext(`restoreGroup(${JSON.stringify(settingsStash)})`, result.context);
-  await new Promise(setImmediate);
-  assert.deepEqual(result.groupedTabs, [{ tabIds: [20, 21] }]);
-  assert.deepEqual(result.discardedTabs, []);
-  assert.deepEqual(result.getItems(), [settingsStash]);
-  await result.emitTabUpdate(20, { url: settingsStash.tabs[0].url, pendingUrl: undefined });
-  assert.deepEqual(result.discardedTabs, []);
-  await result.emitTabUpdate(20, { title: 'One' });
-  await result.emitTabUpdate(21, { url: settingsStash.tabs[1].url, pendingUrl: undefined, title: 'Two' });
-  await restoring;
-  assert.deepEqual(result.discardedTabs, [20, 21]);
-  assert.equal(result.getTab(20).url, settingsStash.tabs[0].url);
-  assert.equal(result.getTab(20).groupId, 8);
-  assert.deepEqual(result.getItems(), []);
-  for (const event of Object.values(result.tabListeners)) assert.equal(event.size, 0);
-});
-
-test('unloading waits out a pending redirect even if a URL and old title are present', async () => {
-  const result = runManager([settingsStash], { pendingNavigation: true, preferences: { unloadAfterRestore: true } });
-  const restoring = vm.runInContext(`restoreGroup(${JSON.stringify(settingsStash)})`, result.context);
-  await new Promise(setImmediate);
-  await result.emitTabUpdate(20, { url: settingsStash.tabs[0].url, title: 'Old title', pendingUrl: 'https://redirect.example/final' });
-  assert.deepEqual(result.discardedTabs, []);
-  await result.emitTabUpdate(20, { url: 'https://redirect.example/final', title: 'Final title', pendingUrl: undefined });
-  await result.activateTab(21);
-  await restoring;
-  assert.equal(result.getTab(20).url, 'https://redirect.example/final');
-  assert.deepEqual(result.discardedTabs, [20]);
-});
-
-test('selecting or closing a pending tab cancels its unload request', async () => {
-  const result = runManager([settingsStash], { pendingNavigation: true, preferences: { unloadAfterRestore: true } });
-  const restoring = vm.runInContext(`restoreGroup(${JSON.stringify(settingsStash)})`, result.context);
-  await new Promise(setImmediate);
-  await result.activateTab(20);
-  await result.closeTab(21);
-  await restoring;
-  await result.emitTabUpdate(20, { url: settingsStash.tabs[0].url, title: 'One', pendingUrl: undefined, active: false });
-  assert.deepEqual(result.discardedTabs, []);
-  assert.deepEqual(result.getItems(), []);
-  assert.equal(result.getElement('notification-message').textContent, 'Restored your tabs.');
-  for (const event of Object.values(result.tabListeners)) assert.equal(event.size, 0);
-});
-
-test('unload timeout leaves pending tabs intact and reports failure with keep on or off', async () => {
-  for (const keepAfterRestore of [true, false]) {
-    const result = runManager([settingsStash], { pendingNavigation: true, preferences: { keepAfterRestore, unloadAfterRestore: true } });
-    const restoring = vm.runInContext(`restoreGroup(${JSON.stringify(settingsStash)})`, result.context);
-    await new Promise(setImmediate);
-    await result.advanceTime(30000);
-    await restoring;
-    assert.deepEqual(result.discardedTabs, []);
-    assert.deepEqual(result.getItems(), keepAfterRestore ? [settingsStash] : []);
-    assert.equal(result.getTab(20).pendingUrl, settingsStash.tabs[0].url);
-    assert.match(result.getElement('notification-message').textContent, /Some tabs.*remain loaded/);
-    for (const event of Object.values(result.tabListeners)) assert.equal(event.size, 0);
-  }
-});
-
-test('unloading rechecks an update that arrives during a tab read', async () => {
-  const result = runManager([settingsStash], { pendingNavigation: true, preferences: { unloadAfterRestore: true } });
-  const get = result.context.chrome.tabs.get;
-  let release;
-  result.context.chrome.tabs.get = async id => {
-    const snapshot = await get(id);
-    if (id === 20 && !release) return new Promise(resolve => { release = () => resolve(snapshot); });
-    return snapshot;
-  };
-  const restoring = vm.runInContext(`restoreGroup(${JSON.stringify(settingsStash)})`, result.context);
-  await new Promise(setImmediate);
-  await result.emitTabUpdate(20, { url: settingsStash.tabs[0].url, title: 'One', pendingUrl: undefined });
-  release();
-  await result.emitTabUpdate(21, { url: settingsStash.tabs[1].url, title: 'Two', pendingUrl: undefined });
-  await restoring;
-  assert.deepEqual(result.discardedTabs.sort(), [20, 21]);
-  for (const event of Object.values(result.tabListeners)) assert.equal(event.size, 0);
-});
-
-test('tab read failure cannot abort restoration or leave unload listeners behind', async () => {
-  const result = runManager([settingsStash], { failTabGet: true, preferences: { unloadAfterRestore: true } });
-  await vm.runInContext(`restoreGroup(${JSON.stringify(settingsStash)})`, result.context);
-  assert.deepEqual(result.getItems(), []);
-  assert.deepEqual(result.discardedTabs, []);
-  assert.match(result.getElement('notification-message').textContent, /Some tabs.*remain loaded/);
-  for (const event of Object.values(result.tabListeners)) assert.equal(event.size, 0);
-});
-
-test('keep and unload preserve saved data when tab creation or grouping fails', async () => {
-  for (const failure of ['failTabCreation', 'failTabGrouping']) {
-    const result = runManager([settingsStash], { [failure]: true, preferences: { keepAfterRestore: true, unloadAfterRestore: true } });
     await vm.runInContext(`restoreGroup(${JSON.stringify(settingsStash)})`, result.context);
-    assert.deepEqual(result.getItems(), [settingsStash]);
-    assert.match(result.getElement('notification-message').textContent, /kept/i);
-  }
-});
+    assert.deepEqual(result.createdTabs.map(({ id, ...tab }) => tab), settingsStash.tabs.map(tab => ({
+      url: tab.url, active: false
+    })));
+    assert.deepEqual(result.getItems(), keepAfterRestore ? [settingsStash] : []);
+    assert.deepEqual(result.groupedTabs, [{ tabIds: [20, 21] }]);
+    assert.deepEqual(result.updatedGroups, [[8, { title: settingsStash.title, color: 'blue', collapsed: false }]]);
+    assert.equal(result.getTab(20).pendingUrl, settingsStash.tabs[0].url);
+    assert.equal(result.getTab(20).discarded, false);
+    assert.equal(result.getElement('notification-message').textContent, 'Restored your tabs.');
+  });
+}
 
 test('startup stays off for absent, false and invalid preferences', async () => {
   for (const preferences of [{}, { openOnStartup: false }, { openOnStartup: 'true' }]) {

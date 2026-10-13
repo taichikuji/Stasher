@@ -1697,7 +1697,7 @@ test('a new notification resets dismissal and normal messages expire after three
   assert.equal(result.getElement('notification').popoverOpen, false);
 });
 
-test('deletion notifications allow successive Undo actions and expire after five seconds', async () => {
+test('deletion notifications allow successive Undo actions and expire after thirty seconds', async () => {
   const first = { id: 'first', title: 'First', tabs: [] };
   const second = { id: 'second', title: 'Second', tabs: [] };
   const result = runManager([first, second]);
@@ -1707,7 +1707,7 @@ test('deletion notifications allow successive Undo actions and expire after five
   await result.getElement('notification-undo').onclick();
   assert.deepEqual(result.getItems(), [second]);
   assert.equal(result.getElement('notification-undo').hidden, false);
-  await result.advanceTime(4999);
+  await result.advanceTime(29999);
   assert.equal(result.getElement('notification').popoverOpen, true);
   await result.advanceTime(1);
   assert.equal(result.getElement('notification').popoverOpen, false);
@@ -1770,14 +1770,14 @@ test('an Undo in progress blocks duplicate clicks and cannot expire during a slo
   while (!finish) await new Promise(resolve => setImmediate(resolve));
   await result.getElement('notification-undo').onclick();
   await vm.runInContext("showNotification('Another message')", result.context);
-  await result.advanceTime(6000);
+  await result.advanceTime(31000);
   assert.equal(result.getElement('notification').popoverOpen, true);
   assert.equal(result.getElement('notification-undo').disabled, true);
   finish();
   await pending;
   assert.deepEqual(result.getItems(), [stash]);
   assert.equal(result.getElement('notification-undo').hidden, false);
-  await result.advanceTime(5000);
+  await result.advanceTime(30000);
   assert.equal(result.getElement('notification').popoverOpen, false);
   await result.getElement('notification-undo').onclick();
   assert.deepEqual(result.getItems(), [stash]);
@@ -1887,4 +1887,32 @@ test('manifest defines one browser-managed action shortcut and no options page',
   assert.equal(manifest.options_ui, undefined);
   assert.deepEqual(Object.keys(manifest.commands), ['_execute_action']);
   assert.equal(manifest.commands._execute_action.suggested_key, 'Alt+S');
+});
+
+
+test('tab Undo preserves concurrent title edits and additions', async () => {
+  const stash = { id: 'edit', title: 'Original', tabs: [
+    { title: 'One', url: 'https://one.example' }, { title: 'Two', url: 'https://two.example' }
+  ] };
+  const result = runManager([stash]);
+  await vm.runInContext("removeTabFromStash('edit', 0)", result.context);
+  const addition = { title: 'New', url: 'https://new.example' };
+  await result.storage.local.set({ stashedItems: [{ ...stash, title: 'Edited', tabs: [stash.tabs[1], addition] }] });
+  await vm.runInContext('handleUndo()', result.context);
+  assert.equal(result.getItems()[0].title, 'Edited');
+  assert.deepEqual(result.getItems()[0].tabs, [...stash.tabs, addition]);
+});
+
+
+test('stash Undo preserves a reused ID without creating duplicate IDs or replacing imported work', async () => {
+  const original = { id: 'reused', title: 'Original', tabs: [{ title: 'One', url: 'https://one.example' }] };
+  const imported = { id: 'reused', title: 'Imported', tabs: [{ title: 'Two', url: 'https://two.example' }] };
+  const result = runManager([original]);
+  await vm.runInContext("deleteStash('reused')", result.context);
+  await result.storage.local.set({ stashedItems: [imported] });
+  await vm.runInContext('handleUndo()', result.context);
+  assert.equal(result.getItems().length, 2);
+  assert.equal(new Set(result.getItems().map(item => item.id)).size, 2);
+  assert.deepEqual(result.getItems().find(item => item.id === 'reused'), imported);
+  assert.deepEqual(result.getItems().find(item => item.id !== 'reused').tabs, original.tabs);
 });

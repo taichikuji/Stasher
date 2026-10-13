@@ -5,7 +5,7 @@
 const CONFIG = {
   STORAGE_KEY: 'stashedItems',
   CHROME_COLORS: ['grey', 'blue', 'red', 'yellow', 'green', 'pink', 'purple', 'cyan', 'orange'],
-  UNDO_TIMEOUT_MS: 5000,
+  UNDO_TIMEOUT_MS: 30000,
   NOTIFICATION_TIMEOUT_MS: 3000,
   MAX_TITLE_LENGTH: 200,
   MAX_IMPORT_BYTES: 1024 * 1024,
@@ -264,6 +264,8 @@ async function removeTabFromStash(stashId, tabIndex) {
       undoEntry = {
         kind: 'tab',
         stashSnapshot: structuredClone(items[index]),
+        tabIndex,
+        tab: structuredClone(removedTab),
         label: removedTab.title || removedTab.url || 'Tab'
       };
 
@@ -574,13 +576,17 @@ async function handleUndo() {
   try {
     await updateStashItems(items => {
       if (entry.kind === 'stash') {
-        return [entry.item, ...items];
+        const saved = entry.item;
+        const current = items.find(item => item.id === saved.id);
+        if (current && JSON.stringify(current) === JSON.stringify(saved)) return null;
+        return [current ? {
+          ...saved, id: crypto.randomUUID(), title: `${saved.title || 'Stash'} (recovered)`.slice(0, CONFIG.MAX_TITLE_LENGTH)
+        } : saved, ...items];
       } else {
-        // Tab removal: replace the existing stash with the pre-removal snapshot,
-        // or re-insert it at the top if it was cascade-deleted (last tab gone).
+        // Insert only the removed tab so Undo preserves edits made in another manager.
         const existing = items.findIndex(i => i.id === entry.stashSnapshot.id);
         if (existing !== -1) {
-          items[existing] = entry.stashSnapshot;
+          items[existing].tabs.splice(Math.min(entry.tabIndex, items[existing].tabs.length), 0, entry.tab);
           return items;
         }
         return [entry.stashSnapshot, ...items];

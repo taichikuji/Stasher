@@ -1888,3 +1888,41 @@ test('manifest defines one browser-managed action shortcut and no options page',
   assert.deepEqual(Object.keys(manifest.commands), ['_execute_action']);
   assert.equal(manifest.commands._execute_action.suggested_key, 'Alt+S');
 });
+
+
+test('collapse choices survive closing the manager and collapsed rows stay lazy', async () => {
+  const stash = { id: 'lazy', tabs: [{ title: 'One', url: 'https://one.example' }] };
+  const result = runManager([stash]);
+  await vm.runInContext('loadStashes()', result.context);
+  await result.getElement('collapseAllBtn').onclick();
+  assert.deepEqual(result.storage.snapshot().collapsedStashIds, ['lazy']);
+  const reopened = runManager([], { storage: result.storage });
+  await vm.runInContext('loadStashes()', reopened.context);
+  assert.equal(reopened.getElement('stash-container').children[0].children[1].children.length, 0);
+  const header = reopened.getElement('stash-container').children[0].children[0];
+  await header.children[0].onclick();
+  const list = reopened.getElement('stash-container').children[0].children[1];
+  assert.equal(list.children.length, 1);
+  await reopened.getElement('collapseAllBtn').onclick();
+  assert.equal(reopened.getElement('stash-container').children[0].children[1].children.length, 0);
+  assert.deepEqual(result.getItems(), [stash]);
+});
+
+
+test('collapse state synchronizes and failed writes leave the view unchanged', async () => {
+  const stash = { id: 'collapse', tabs: [{ title: 'One', url: 'https://one.example' }] };
+  const storage = createStorage({ stashedItems: [stash] });
+  const first = runManager([], { storage });
+  const second = runManager([], { storage });
+  await Promise.all([vm.runInContext('loadStashes()', first.context), vm.runInContext('loadStashes()', second.context)]);
+  await first.getElement('collapseAllBtn').onclick();
+  await vm.runInContext('loadStashes()', second.context);
+  assert.equal(second.getElement('stash-container').children[0].children[1].children.length, 0);
+  await second.getElement('collapseAllBtn').onclick();
+  assert.deepEqual(storage.snapshot().collapsedStashIds, []);
+  const failed = runManager([stash], { failStorageSetAt: 1 });
+  await vm.runInContext('loadStashes()', failed.context);
+  await failed.getElement('collapseAllBtn').onclick();
+  assert.equal(failed.getElement('stash-container').children[0].children[1].children.length, 1);
+  assert.match(failed.getElement('notification-message').textContent, /Could not save collapsed/);
+});

@@ -112,15 +112,8 @@ function runBackground(options = {}) {
     action: {
       onClicked: eventSlot(listeners, 'actionClicked')
     },
-    commands: {
-      onCommand: eventSlot(listeners, 'command')
-    },
-    sidePanel: {
-      open: async details => {
-        if (options.failSidePanel) throw new Error('Panel opening failed');
-        openedPanels.push(clone(details));
-      }
-    },
+    commands: { onCommand: eventSlot(listeners, 'command') },
+    sidePanel: { open: async details => openedPanels.push(clone(details)) },
     permissions: {
       request: async details => {
         permissionRequests.push(clone(details));
@@ -196,6 +189,7 @@ function createElement(initialClasses = []) {
   const classes = new Set(initialClasses);
   const listeners = new Map();
   const element = {
+    value: '',
     children: [],
     append(...children) {
       this.children.push(...children);
@@ -247,6 +241,7 @@ function createElement(initialClasses = []) {
 function runManager(initialItems, options = {}) {
   const documentListeners = {};
   const createdTabs = [];
+  const createdWindows = [];
   const errors = [];
   const groupedTabs = [];
   const updatedGroups = [];
@@ -264,6 +259,17 @@ function runManager(initialItems, options = {}) {
       getURL: path => `chrome-extension://stasher/${path}`
     },
     storage,
+    windows: {
+      create: async details => {
+        if (options.failWindowCreation) throw new Error('Window creation failed');
+        const opened = (Array.isArray(details.url) ? details.url : [details.url]).map(url => ({ id: nextTabId++, url, windowId: 7 }));
+        opened.forEach(tab => tabs.set(tab.id, tab));
+        const window = { id: 7, tabs: opened, ...clone(details) };
+        createdWindows.push(window);
+        if (options.missingWindowTabs) delete window.tabs;
+        return clone(window);
+      }
+    },
     permissions: {
       contains: async () => options.groupPermissionGranted !== false
     },
@@ -280,7 +286,10 @@ function runManager(initialItems, options = {}) {
       group: async details => {
         if (options.failTabGrouping) throw new Error('Tab grouping failed');
         groupedTabs.push(clone(details));
-        for (const id of details.tabIds) tabs.get(id).groupId = 8;
+        for (const id of details.tabIds) {
+          tabs.get(id).groupId = 8;
+          tabs.get(id).windowId = details.createProperties?.windowId ?? 4;
+        }
         return 8;
       }
     },
@@ -305,6 +314,7 @@ function runManager(initialItems, options = {}) {
       return elements.get(id);
     },
     createElement,
+    createTextNode: text => ({ textContent: text }),
     querySelector: () => null
   };
 
@@ -336,6 +346,7 @@ function runManager(initialItems, options = {}) {
   return {
     context,
     createdTabs,
+    createdWindows,
     errors,
     groupedTabs,
     updatedGroups,
@@ -964,7 +975,7 @@ test('reports cleanup failure and retains the restored stash', async () => {
   assert.match(result.getElement('notification-message').textContent, /kept to avoid data loss/i);
 });
 
-const preferenceKeys = ['openOnStartup', 'keepAfterRestore', 'skipDuplicates', 'editOnDoubleClick'];
+const preferenceKeys = ['openOnStartup', 'keepAfterRestore', 'restoreInNewWindow', 'skipDuplicates', 'editOnDoubleClick'];
 const settingsStash = {
   id: 'settings-stash', type: 'group', title: 'Settings test', color: 'blue',
   tabs: [{ title: 'One', url: 'https://one.example' }, { title: 'Two', url: 'https://two.example' }]
@@ -1894,7 +1905,7 @@ test('manifest defines a Chromium MV3 service worker', () => {
   assert.match(managerHtml, /<main id="stash-container" tabindex="-1" aria-live="polite">/);
 });
 
-test('manifest defines separate stash and side-panel shortcuts and no options page', () => {
+test('manifest defines native stash and side-panel shortcuts and no options page', () => {
   const manifest = JSON.parse(readFileSync(join(root, 'manifest.json'), 'utf8'));
 
   assert.equal(manifest.options_ui, undefined);
@@ -1906,37 +1917,176 @@ test('manifest defines separate stash and side-panel shortcuts and no options pa
 });
 
 
-test('side-panel shortcut opens the active window without stashing or requesting permissions', async () => {
-  const stash = { id: 'saved', tabs: [{ title: 'One', url: 'https://one.example' }] };
-  const result = runBackground({ items: [stash] });
-  await result.listeners.command('open-side-panel', { id: 12, windowId: 7 });
-  assert.deepEqual(result.openedPanels, [{ windowId: 7 }]);
+test('restores into one new window without a spare blank tab and retains failures', async () => {
+  const stash = { id: 'window', type: 'group', title: 'Work', color: 'blue', tabs: [
+    { title: 'One', url: 'https://one.example' }, { title: 'Two', url: 'https://two.example' }
+  ] };
+  const result = runManager([stash], { preferences: { restoreInNewWindow: true } });
+  await vm.runInContext(`restoreGroup(${JSON.stringify(stash)})`, result.context);
+  assert.equal(result.createdWindows.length, 1);
+  assert.deepEqual(result.createdWindows[0].url, stash.tabs.map(tab => tab.url));
   assert.deepEqual(result.createdTabs, []);
-  assert.deepEqual(result.removedTabs, []);
-  assert.deepEqual(result.permissionRequests, []);
-  assert.deepEqual(result.storage.writes, []);
-  assert.deepEqual(result.getItems(), [stash]);
-  await result.listeners.command('_execute_action', { windowId: 7 });
-  await result.listeners.command('open-side-panel');
-  assert.equal(result.openedPanels.length, 1);
+  assert.deepEqual(result.groupedTabs, [{ tabIds: [20, 21], createProperties: { windowId: 7 } }]);
+  assert.deepEqual([20, 21].map(id => result.getTab(id).windowId), [7, 7]);
+  assert.deepEqual(result.getItems(), []);
+  for (const options of [{ failWindowCreation: true }, { missingWindowTabs: true }]) {
+    const failed = runManager([stash], { ...options, preferences: { restoreInNewWindow: true } });
+    await vm.runInContext(`restoreGroup(${JSON.stringify(stash)})`, failed.context);
+    assert.deepEqual(failed.getItems(), [stash]);
+  }
 });
 
 
-test('a side-panel shortcut failure preserves the archive and reports the error', async () => {
-  const stash = { id: 'saved', tabs: [] };
-  const result = runBackground({ items: [stash], failSidePanel: true });
+
+test('restore button and title double-click both honor the new-window setting', async () => {
+  const stash = { id: 'window-controls', type: 'loose', tabs: [{ title: 'One', url: 'https://one.example' }] };
+  for (const control of ['button', 'title']) {
+    const result = runManager([stash], { preferences: { restoreInNewWindow: true } });
+    const header = createElement();
+    result.context.header = header;
+    await vm.runInContext('renderViewMode(header, ' + JSON.stringify(stash) + ')', result.context);
+    if (control === 'button') await header.children[4].children[0].onclick();
+    else await header.children[1].trigger('dblclick');
+    assert.equal(result.createdWindows.length, 1);
+    assert.equal(result.createdTabs.length, 0);
+  }
+});
+
+
+test('highlights literal queries without turning saved titles into markup', () => {
+  const result = runManager([]);
+  result.context.document.createElement = tag => Object.assign(createElement(), { tagName: tag });
+  result.getElement('searchInput').value = '[a]';
+  result.context.label = createElement();
+  vm.runInContext("highlightText(label, '<img src=x> [A] and [a]')", result.context);
+  assert.deepEqual(result.context.label.children.filter(part => part.tagName === 'mark').map(part => part.textContent), ['[A]', '[a]']);
+  assert.equal(result.context.label.children.map(part => part.textContent).join(''), '<img src=x> [A] and [a]');
+});
+
+
+test('search uses the loaded archive without mutating or rereading storage', async () => {
+  const stash = { id: 'found', title: 'Needle', tabs: [
+    { title: 'One', url: 'https://one.example' }, { title: 'Two', url: 'https://two.example' }
+  ] };
+  const result = runManager([stash, { id: 'other', title: 'Other', tabs: [] }]);
+  await vm.runInContext('loadStashes()', result.context);
+  let reads = 0;
+  const get = result.storage.local.get;
+  result.storage.local.get = query => { reads++; return get(query); };
+  result.getElement('searchInput').value = 'needle';
+  await result.getElement('searchInput').oninput();
+  assert.equal(reads, 0);
+  assert.equal(result.getElement('stash-container').children.length, 1);
+  assert.equal(result.storage.writes.length, 0);
+});
+
+
+test('a late archive read cannot overwrite a newer storage change', async () => {
+  const result = runManager([]);
+  await vm.runInContext('loadStashes()', result.context);
+  const pending = [];
+  result.storage.local.get = () => new Promise(resolve => pending.push(resolve));
+  const older = vm.runInContext('loadStashes()', result.context);
+  const newer = vm.runInContext('loadStashes()', result.context);
+  pending[1]({ stashedItems: [{ id: 'new', title: 'New', tabs: [] }] });
+  await newer;
+  pending[0]({ stashedItems: [{ id: 'old', title: 'Old', tabs: [] }] });
+  await older;
+  assert.equal(vm.runInContext('state.items[0].id', result.context), 'new');
+});
+
+test('cached typing does not cancel a pending storage refresh', async () => {
+  const result = runManager([{ id: 'old', title: 'Old', tabs: [] }]);
+  await vm.runInContext('loadStashes()', result.context);
+  let resolveRead;
+  result.storage.local.get = () => new Promise(resolve => { resolveRead = resolve; });
+  const refreshing = vm.runInContext('loadStashes()', result.context);
+  result.getElement('searchInput').value = 'new';
+  await result.getElement('searchInput').oninput();
+  resolveRead({ stashedItems: [{ id: 'new', title: 'New', tabs: [] }] });
+  await refreshing;
+  assert.equal(vm.runInContext('state.items[0].id', result.context), 'new');
+  assert.equal(result.getElement('stash-container').children[0].children[0].children[1].children.map(part => part.textContent).join(''), 'New');
+});
+
+test('collapse choices survive reopening and collapsed rows stay lazy', async () => {
+  const stash = { id: 'lazy', tabs: [{ title: 'One', url: 'https://one.example' }] };
+  const first = runManager([stash]);
+  await vm.runInContext('loadStashes()', first.context);
+  await first.getElement('collapseAllBtn').onclick();
+  const reopened = runManager([], { storage: first.storage });
+  await vm.runInContext('loadStashes()', reopened.context);
+  const card = () => reopened.getElement('stash-container').children[0];
+  assert.equal(card().children[1].children.length, 0);
+  await card().children[0].children[0].onclick();
+  assert.equal(card().children[1].children.length, 1);
+  assert.deepEqual(first.getItems(), [stash]);
+});
+
+test('collapse synchronizes automatically and a failed save leaves tabs visible', async () => {
+  const stash = { id: 'collapse', tabs: [{ title: 'One', url: 'https://one.example' }] };
+  const storage = createStorage({ stashedItems: [stash] });
+  const first = runManager([], { storage }), second = runManager([], { storage });
+  await Promise.all([vm.runInContext('loadStashes()', first.context), vm.runInContext('loadStashes()', second.context)]);
+  await first.getElement('collapseAllBtn').onclick();
+  assert.equal(second.getElement('stash-container').children[0].children[1].children.length, 0);
+  await second.getElement('collapseAllBtn').onclick();
+  assert.equal(first.getElement('stash-container').children[0].children[1].children.length, 1);
+  const failed = runManager([stash], { failStorageSetAt: 1 });
+  await vm.runInContext('loadStashes()', failed.context);
+  await failed.getElement('collapseAllBtn').onclick();
+  assert.equal(failed.getElement('stash-container').children[0].children[1].children.length, 1);
+  assert.match(failed.getElement('notification-message').textContent, /Could not save collapsed/);
+});
+
+
+test('tab Undo preserves concurrent title edits and additions', async () => {
+  const stash = { id: 'edit', title: 'Original', tabs: [
+    { title: 'One', url: 'https://one.example' }, { title: 'Two', url: 'https://two.example' }
+  ] };
+  const result = runManager([stash]);
+  await vm.runInContext("removeTabFromStash('edit', 0)", result.context);
+  const addition = { title: 'New', url: 'https://new.example' };
+  await result.storage.local.set({ stashedItems: [{ ...stash, title: 'Edited', tabs: [stash.tabs[1], addition] }] });
+  await vm.runInContext('handleUndo()', result.context);
+  assert.equal(result.getItems()[0].title, 'Edited');
+  assert.deepEqual(result.getItems()[0].tabs, [...stash.tabs, addition]);
+});
+
+
+test('stash Undo preserves a reused ID without creating duplicate IDs or replacing imported work', async () => {
+  const original = { id: 'reused', title: 'Original', tabs: [{ title: 'One', url: 'https://one.example' }] };
+  const imported = { id: 'reused', title: 'Imported', tabs: [{ title: 'Two', url: 'https://two.example' }] };
+  const result = runManager([original]);
+  await vm.runInContext("deleteStash('reused')", result.context);
+  await result.storage.local.set({ stashedItems: [imported] });
+  await vm.runInContext('handleUndo()', result.context);
+  assert.equal(result.getItems().length, 2);
+  assert.equal(new Set(result.getItems().map(item => item.id)).size, 2);
+  assert.deepEqual(result.getItems().find(item => item.id === 'reused'), imported);
+  assert.deepEqual(result.getItems().find(item => item.id !== 'reused').tabs, original.tabs);
+});
+
+
+test('side-panel shortcut opens the current window without stashing and handles failure', async () => {
+  const result = runBackground({ items: [{ id: 'saved', tabs: [] }] });
   await result.listeners.command('open-side-panel', { windowId: 7 });
-  assert.deepEqual(result.getItems(), [stash]);
-  assert.deepEqual(result.openedPanels, []);
+  assert.deepEqual(result.openedPanels, [{ windowId: 7 }]);
+  assert.deepEqual(result.removedTabs, []);
+  assert.deepEqual(result.storage.writes, []);
+  assert.deepEqual(result.permissionRequests, []);
+  await result.listeners.command('open-side-panel');
+  assert.equal(result.openedPanels.length, 1);
+  result.context.chrome.sidePanel.open = async () => { throw new Error('Panel failed'); };
+  await result.listeners.command('open-side-panel', { windowId: 7 });
   assert.equal(result.errors.length, 1);
 });
 
 
-test('manager and side panel share a restore lock even for a kept stash', async () => {
+test('manager surfaces share a restore lock and use current saved tabs', async () => {
   const stash = { id: 'shared', tabs: [{ title: 'One', url: 'https://one.example' }] };
   const storage = createStorage({ stashedItems: [stash], keepAfterRestore: true });
-  const first = runManager([stash], { storage });
-  const second = runManager([stash], { storage });
+  const first = runManager([], { storage }), second = runManager([], { storage });
   let release;
   const create = first.context.chrome.tabs.create;
   first.context.chrome.tabs.create = async details => {
@@ -1951,21 +2101,22 @@ test('manager and side panel share a restore lock even for a kept stash', async 
   await restoring;
   assert.equal(first.createdTabs.length, 1);
   assert.deepEqual(first.getItems(), [stash]);
+  const edited = { ...stash, tabs: [{ title: 'Two', url: 'https://two.example' }] };
+  await storage.local.set({ stashedItems: [edited] });
   await vm.runInContext(`restoreGroup(${JSON.stringify(stash)})`, second.context);
-  assert.equal(second.createdTabs.length, 1);
+  assert.equal(second.createdTabs[0].url, edited.tabs[0].url);
 });
 
 
-test('restoration cannot consume a stash changed by another manager while tabs open', async () => {
+test('restoration keeps edits made in another manager while tabs open', async () => {
   const stash = { id: 'edited', tabs: [{ title: 'One', url: 'https://one.example' }] };
-  const result = runManager([stash]);
+  const edited = { ...stash, title: 'New title' }, result = runManager([stash]);
   const create = result.context.chrome.tabs.create;
   result.context.chrome.tabs.create = async details => {
-    const tab = await create(details);
-    await result.storage.local.set({ stashedItems: [{ ...stash, keepAfterRestore: true }] });
-    return tab;
+    await result.storage.local.set({ stashedItems: [edited] });
+    return create(details);
   };
   await vm.runInContext(`restoreGroup(${JSON.stringify(stash)})`, result.context);
-  assert.equal(result.getItems()[0].keepAfterRestore, true);
+  assert.deepEqual(result.getItems(), [edited]);
   assert.match(result.getElement('notification-message').textContent, /saved stash was kept/);
 });

@@ -23,6 +23,8 @@ const PREFERENCE_DEFAULTS = {
 
 // State Management
 const state = {
+  items: null,
+  loadRevision: 0,
   undoStack: [],
   notificationTimeout: null,
   restoringIds: new Set(),
@@ -113,37 +115,32 @@ chrome.storage.onChanged.addListener((changes, namespace) => {
 setupEventListeners();
 
 async function loadStashes() {
+  const revision = ++state.loadRevision;
   try {
-    // Rebuild instead of patching individual cards so storage changes from any
-    // extension context produce one consistent view.
     const items = await getStashItems();
-    elements.container.innerHTML = '';
-
-    if (items.length === 0) {
-      const p = document.createElement('p');
-      p.className = 'empty-state';
-      p.textContent = 'No tabs stashed yet.';
-      elements.container.appendChild(p);
-      return;
-    }
-
-    const visibleItems = rankStashesByQuery(items, elements.searchInput.value);
-    if (visibleItems.length === 0) {
-      const p = document.createElement('p');
-      p.className = 'empty-state';
-      p.textContent = 'No stashes match your search.';
-      elements.container.appendChild(p);
-      return;
-    }
-
-    elements.container.append(...visibleItems.map(createStashCard));
-
+    if (revision !== state.loadRevision) return;
+    state.items = items;
+    renderStashes();
   } catch (error) {
-    console.error("Error loading stashes:", error);
+    if (revision !== state.loadRevision) return;
+    console.error('Error loading stashes:', error);
     const p = document.createElement('p');
     p.className = 'error-state';
-    p.textContent = 'Error loading content.';
-    elements.container.appendChild(p);
+    p.textContent = 'Could not load your stashes. Reload this page to try again.';
+    elements.container.replaceChildren(p);
+  }
+}
+
+function renderStashes() {
+  const items = state.items || [];
+  const visibleItems = rankStashesByQuery(items, elements.searchInput.value);
+  if (visibleItems.length) {
+    elements.container.replaceChildren(...visibleItems.map(createStashCard));
+  } else {
+    const p = document.createElement('p');
+    p.className = 'empty-state';
+    p.textContent = items.length ? 'No stashes match your search.' : 'No tabs stashed yet. Click the Stasher icon or press Alt+S to get started.';
+    elements.container.replaceChildren(p);
   }
 }
 
@@ -164,6 +161,20 @@ function rankStashesByQuery(items, query) {
 
   return ranked.flat();
 }
+
+// Create elements instead of inserting page titles or imported text as HTML.
+function highlightText(element, value) {
+  const text = String(value || '');
+  const query = elements.searchInput.value.trim();
+  element.textContent = text;
+  if (!query) return;
+  const escaped = query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const parts = text.split(new RegExp(`(${escaped})`, 'gi'));
+  element.replaceChildren(...parts.map((part, index) => index % 2
+    ? Object.assign(document.createElement('mark'), { textContent: part })
+    : document.createTextNode(part)));
+}
+
 
 /**
  * Creates the DOM element for a stash card.
@@ -231,7 +242,8 @@ function createTabListItem(tab, stashId, tabIndex) {
 
   const a = document.createElement('a');
   a.href = url;
-  a.textContent = tab.title || url;
+  a.title = url;
+  highlightText(a, tab.title || url);
   a.target = '_blank';
   a.rel = 'noopener noreferrer';
 
@@ -320,7 +332,7 @@ function renderViewMode(container, item) {
   // 1. Badge
   const badge = document.createElement('h2');
   badge.className = `group-badge color-${safeColor(item.color)}`;
-  badge.textContent = item.title || (item.type === 'group' ? 'Untitled Group' : 'Ungrouped Tabs');
+  highlightText(badge, item.title || (item.type === 'group' ? 'Untitled Group' : 'Ungrouped Tabs'));
   badge.style.cursor = 'pointer';
   badge.addEventListener('dblclick', async () => {
     try {
@@ -795,7 +807,7 @@ function setupEventListeners() {
     input.addEventListener('change', () => savePreference(key));
   }
   elements.importFile.onchange = () => handleImport();
-  elements.searchInput.oninput = loadStashes;
+  elements.searchInput.oninput = () => state.items ? renderStashes() : loadStashes();
   document.addEventListener('keydown', event => {
     if (event.key === 'f' && (event.metaKey || event.ctrlKey)) {
       event.preventDefault();

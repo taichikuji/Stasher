@@ -673,3 +673,6 @@ textarea {
     flex-wrap: wrap;
   }
 }
+
+/* Highlight literal matches without changing the saved text. */
+mark { color: inherit; background: color-mix(in srgb, var(--blue) 18%, var(--surface)); border-radius: 2px; }

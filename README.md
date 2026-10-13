@@ -94,6 +94,8 @@ The manager header stays visible while scrolling, keeping search and More action
 
 Enable **Restore stashes in a new window** in Settings to open all saved pages in one native window without a spare blank tab. The restore button and title double-click both follow this setting. Recreated browser groups stay in that window.
 
+Undo remains available for five seconds while the manager is open. It reinserts a deleted tab without replacing newer stash edits and gives a deleted stash a new internal ID if its old ID has been reused.
+
 ### Settings
 
 Open **More actions → Settings**. Changes save automatically on this device and synchronize between open manager tabs. All five switches default off:

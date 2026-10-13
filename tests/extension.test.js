@@ -2029,3 +2029,31 @@ test('collapse synchronizes automatically and a failed save leaves tabs visible'
   assert.equal(failed.getElement('stash-container').children[0].children[1].children.length, 1);
   assert.match(failed.getElement('notification-message').textContent, /Could not save collapsed/);
 });
+
+
+test('tab Undo preserves concurrent title edits and additions', async () => {
+  const stash = { id: 'edit', title: 'Original', tabs: [
+    { title: 'One', url: 'https://one.example' }, { title: 'Two', url: 'https://two.example' }
+  ] };
+  const result = runManager([stash]);
+  await vm.runInContext("removeTabFromStash('edit', 0)", result.context);
+  const addition = { title: 'New', url: 'https://new.example' };
+  await result.storage.local.set({ stashedItems: [{ ...stash, title: 'Edited', tabs: [stash.tabs[1], addition] }] });
+  await vm.runInContext('handleUndo()', result.context);
+  assert.equal(result.getItems()[0].title, 'Edited');
+  assert.deepEqual(result.getItems()[0].tabs, [...stash.tabs, addition]);
+});
+
+
+test('stash Undo preserves a reused ID without creating duplicate IDs or replacing imported work', async () => {
+  const original = { id: 'reused', title: 'Original', tabs: [{ title: 'One', url: 'https://one.example' }] };
+  const imported = { id: 'reused', title: 'Imported', tabs: [{ title: 'Two', url: 'https://two.example' }] };
+  const result = runManager([original]);
+  await vm.runInContext("deleteStash('reused')", result.context);
+  await result.storage.local.set({ stashedItems: [imported] });
+  await vm.runInContext('handleUndo()', result.context);
+  assert.equal(result.getItems().length, 2);
+  assert.equal(new Set(result.getItems().map(item => item.id)).size, 2);
+  assert.deepEqual(result.getItems().find(item => item.id === 'reused'), imported);
+  assert.deepEqual(result.getItems().find(item => item.id !== 'reused').tabs, original.tabs);
+});

@@ -305,6 +305,7 @@ async function removeTabFromStash(stashId, tabIndex) {
       undoEntry = {
         kind: 'tab',
         stashSnapshot: structuredClone(items[index]),
+        tabIndex,
         label: removedTab.title || removedTab.url || 'Tab'
       };
 
@@ -622,13 +623,13 @@ async function handleUndo() {
   try {
     await updateStashItems(items => {
       if (entry.kind === 'stash') {
-        return [entry.item, ...items];
+        const item = items.some(i => i.id === entry.item.id) ? { ...entry.item, id: crypto.randomUUID() } : entry.item;
+        return [item, ...items];
       } else {
-        // Tab removal: replace the existing stash with the pre-removal snapshot,
-        // or re-insert it at the top if it was cascade-deleted (last tab gone).
-        const existing = items.findIndex(i => i.id === entry.stashSnapshot.id);
-        if (existing !== -1) {
-          items[existing] = entry.stashSnapshot;
+        // Restore only the removed tab, or the whole stash if its last tab was removed.
+        const existing = items.find(i => i.id === entry.stashSnapshot.id);
+        if (existing) {
+          existing.tabs.splice(entry.tabIndex, 0, entry.stashSnapshot.tabs[entry.tabIndex]);
           return items;
         }
         return [entry.stashSnapshot, ...items];

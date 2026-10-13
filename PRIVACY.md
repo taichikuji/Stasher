@@ -12,7 +12,7 @@ Stasher may request website favicons through Chrome's built-in favicon support t
 
 ## Sharing and retention
 
-Stasher does not send saved tab data to Taichikuji or a developer-operated server, and does not sell or share it with third parties. Saved stashes remain in the extension's local storage until you delete them or remove the extension. If you export a stash, the exported file is saved through your browser and is under your control.
+Stasher does not send saved tab data to Taichikuji or a developer-operated server, and does not sell or share it with third parties. Saved stashes remain in the extension's local storage until you delete them or remove the extension. Collapsed-stash choices are stored locally and cleared when you remove the extension. If you export a stash, the exported file is saved through your browser and is under your control.
 
 ## Contact
 

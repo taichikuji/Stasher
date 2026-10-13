@@ -30,8 +30,10 @@ function eventSlot(listeners, name) {
 function createLocks() {
   const queues = new Map();
   return {
-    request(name, callback) {
-      const pending = (queues.get(name) ?? Promise.resolve()).then(() => callback());
+    request(name, options, callback) {
+      if (typeof options === 'function') { callback = options; options = {}; }
+      if (options.ifAvailable && queues.has(name)) return Promise.resolve(callback(null));
+      const pending = (queues.get(name) ?? Promise.resolve()).then(() => callback({ name }));
       const settled = pending.catch(() => {});
       queues.set(name, settled);
       settled.then(() => {
@@ -2078,4 +2080,43 @@ test('side-panel shortcut opens the current window without stashing and handles 
   result.context.chrome.sidePanel.open = async () => { throw new Error('Panel failed'); };
   await result.listeners.command('open-side-panel', { windowId: 7 });
   assert.equal(result.errors.length, 1);
+});
+
+
+test('manager surfaces share a restore lock and use current saved tabs', async () => {
+  const stash = { id: 'shared', tabs: [{ title: 'One', url: 'https://one.example' }] };
+  const storage = createStorage({ stashedItems: [stash], keepAfterRestore: true });
+  const first = runManager([], { storage }), second = runManager([], { storage });
+  let release;
+  const create = first.context.chrome.tabs.create;
+  first.context.chrome.tabs.create = async details => {
+    await new Promise(resolve => { release = resolve; });
+    return create(details);
+  };
+  const restoring = vm.runInContext(`restoreGroup(${JSON.stringify(stash)})`, first.context);
+  while (!release) await new Promise(setImmediate);
+  await vm.runInContext(`restoreGroup(${JSON.stringify(stash)})`, second.context);
+  assert.equal(second.createdTabs.length, 0);
+  release();
+  await restoring;
+  assert.equal(first.createdTabs.length, 1);
+  assert.deepEqual(first.getItems(), [stash]);
+  const edited = { ...stash, tabs: [{ title: 'Two', url: 'https://two.example' }] };
+  await storage.local.set({ stashedItems: [edited] });
+  await vm.runInContext(`restoreGroup(${JSON.stringify(stash)})`, second.context);
+  assert.equal(second.createdTabs[0].url, edited.tabs[0].url);
+});
+
+
+test('restoration keeps edits made in another manager while tabs open', async () => {
+  const stash = { id: 'edited', tabs: [{ title: 'One', url: 'https://one.example' }] };
+  const edited = { ...stash, title: 'New title' }, result = runManager([stash]);
+  const create = result.context.chrome.tabs.create;
+  result.context.chrome.tabs.create = async details => {
+    await result.storage.local.set({ stashedItems: [edited] });
+    return create(details);
+  };
+  await vm.runInContext(`restoreGroup(${JSON.stringify(stash)})`, result.context);
+  assert.deepEqual(result.getItems(), [edited]);
+  assert.match(result.getElement('notification-message').textContent, /saved stash was kept/);
 });

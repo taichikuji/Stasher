@@ -29,6 +29,7 @@ const state = {
   loadRevision: 0,
   undoStack: [],
   notificationTimeout: null,
+  restoringIds: new Set(),
   preferences: null,
   preferencesRevision: 0,
   savingPreferences: new Set()
@@ -358,7 +359,6 @@ function renderViewMode(container, item) {
   const badge = document.createElement('h2');
   badge.className = `group-badge color-${safeColor(item.color)}`;
   highlightText(badge, item.title || (item.type === 'group' ? 'Untitled Group' : 'Ungrouped Tabs'));
-  badge.title = badge.textContent;
   badge.style.cursor = 'pointer';
   badge.addEventListener('dblclick', async () => {
     try {
@@ -513,18 +513,14 @@ async function updateStashData(id, newTitle, newColor) {
   }
 }
 
-function restoreGroup(item, preferences) {
-  if (!item?.id) return;
-  return navigator.locks.request(`stasher-restore:${item.id}`, { ifAvailable: true }, lock => lock && restoreStash(item, preferences));
-}
-
-async function restoreStash(item, preferences) {
+async function restoreGroup(item, preferences) {
+  // Avoid creating duplicate tabs when the restore control is activated twice.
+  if (!item?.id || state.restoringIds.has(item.id)) return;
+  state.restoringIds.add(item.id);
   const tabIds = [];
 
   try {
     preferences ??= await getPreferences();
-    item = (await getStashItems()).find(stash => stash.id === item.id);
-    if (!item) return;
     const tabs = Array.isArray(item.tabs) ? item.tabs.filter(t => isAllowedTabUrl(t.url)) : [];
     if (tabs.length === 0) return;
     const canRestoreGroup = item.type === 'group' &&
@@ -562,7 +558,7 @@ async function restoreStash(item, preferences) {
     // 4. Cleanup Storage. Await this so a successful restore cannot silently
     // leave a second, apparently unrestored copy behind.
     if (!preferences.keepAfterRestore) {
-      const deleted = await deleteStash(item.id, { undo: false, expected: item });
+      const deleted = await deleteStash(item.id, { undo: false });
       if (!deleted) throw new Error('Restored stash was not found during cleanup');
     }
     showNotification('Restored your tabs.');
@@ -572,17 +568,18 @@ async function restoreStash(item, preferences) {
     showNotification(tabIds.length
       ? 'Tabs were opened, but restoration could not finish. The saved stash was kept to avoid data loss.'
       : 'Could not restore this stash. Your saved tabs were kept.');
+  } finally {
+    state.restoringIds.delete(item.id);
   }
 }
 
-async function deleteStash(id, { undo = true, expected } = {}) {
+async function deleteStash(id, { undo = true } = {}) {
   try {
     let deleted = false;
     let undoEntry;
     await updateStashItems(items => {
       const itemIndex = items.findIndex(i => i.id === id);
       if (itemIndex === -1) return null;
-      if (expected && JSON.stringify(items[itemIndex]) !== JSON.stringify(expected)) throw new Error('Stash changed during restoration; saved data was kept');
 
       if (undo) undoEntry = { kind: 'stash', item: items[itemIndex] };
 

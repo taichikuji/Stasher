@@ -86,6 +86,8 @@ Restoring uses existing group permission and never requests it. Renaming or reco
 
 In the manager, search stash names, tab titles, and URLs, rename stashes, change their colors, or remove saved tabs and stashes. The **More actions** (⋮) button opens Help, Export, Import, Settings, and Delete all stashes; click outside or press Escape to close it. Import and export JSON backups to move your stashes between devices. Saved titles and URLs stay in Chrome local storage on this device, with no account or cloud sync.
 
+Drop **one backup file** onto the manager to import it through the same size limits and validation as the file picker. Plain text drags are ignored; multi-file drops request one file at a time.
+
 ### Settings
 
 Open **More actions → Settings**. Changes save automatically on this device and synchronize between open manager tabs. All four switches default off:

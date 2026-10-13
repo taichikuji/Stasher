@@ -795,6 +795,16 @@ function setupEventListeners() {
     input.addEventListener('change', () => savePreference(key));
   }
   elements.importFile.onchange = () => handleImport();
+  document.addEventListener('dragover', event => {
+    if (event.dataTransfer?.types.includes('Files')) event.preventDefault();
+  });
+  document.addEventListener('drop', event => {
+    if (!event.dataTransfer?.types.includes('Files')) return;
+    event.preventDefault();
+    if (event.dataTransfer.files.length === 1) return handleImport(event.dataTransfer.files[0]);
+    else showNotification('Drop one backup file at a time.');
+  });
+
   elements.searchInput.oninput = loadStashes;
   document.addEventListener('keydown', event => {
     if (event.key === 'f' && (event.metaKey || event.ctrlKey)) {

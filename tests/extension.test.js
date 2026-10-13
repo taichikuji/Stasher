@@ -1888,3 +1888,21 @@ test('manifest defines one browser-managed action shortcut and no options page',
   assert.deepEqual(Object.keys(manifest.commands), ['_execute_action']);
   assert.equal(manifest.commands._execute_action.suggested_key, 'Alt+S');
 });
+
+
+test('dropping one backup adds records through the same validated import path and ignores non-file drags', async () => {
+  const existing = { id: 'existing', tabs: [] };
+  const incoming = { id: 'incoming', tabs: [{ title: 'One', url: 'https://one.example' }] };
+  const result = runManager([existing]);
+  let prevented = 0;
+  const preventDefault = () => prevented++;
+  await result.triggerDocumentEvent('dragover', { dataTransfer: { types: ['text/plain'] }, preventDefault });
+  assert.equal(prevented, 0);
+  const dataTransfer = { types: ['Files'], files: [new File([JSON.stringify([incoming])], 'backup.json')] };
+  await result.triggerDocumentEvent('dragover', { dataTransfer, preventDefault });
+  await result.triggerDocumentEvent('drop', { dataTransfer, preventDefault });
+  assert.equal(prevented, 2);
+  assert.deepEqual(result.getItems().map(item => item.id), ['incoming', 'existing']);
+  await result.triggerDocumentEvent('drop', { dataTransfer: { ...dataTransfer, files: [...dataTransfer.files, ...dataTransfer.files] }, preventDefault });
+  assert.match(result.getElement('notification-message').textContent, /one backup file/);
+});

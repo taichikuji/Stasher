@@ -1888,3 +1888,53 @@ test('manifest defines one browser-managed action shortcut and no options page',
   assert.deepEqual(Object.keys(manifest.commands), ['_execute_action']);
   assert.equal(manifest.commands._execute_action.suggested_key, 'Alt+S');
 });
+
+
+test('TheTab migration preserves ordering and exact URLs without overwriting current IDs', async () => {
+  const current = { id: 'g', title: 'Current', tabs: [{ title: 'Current', url: 'https://current.example' }] };
+  const backup = { version: 1, exportedAt: Date.now(), groups: [{
+    id: 'g', timestamp: 1700000000000, name: 'TheTab work', isLocked: true, note: 'Not imported', tabs: [
+      { url: 'https://one.example/#first', title: 'First', wasPinned: true },
+      { url: 'https://one.example/#second' }
+    ]
+  }] };
+  const result = runManager([current]);
+  result.context.backupFile = new File([JSON.stringify(backup)], 'thetab.json');
+  await vm.runInContext('handleImport(backupFile)', result.context);
+  const migrated = result.getItems()[0];
+  assert.equal(migrated.id, 'thetab:g');
+  assert.equal(migrated.title, 'TheTab work');
+  assert.equal(migrated.keepAfterRestore, undefined);
+  assert.equal(migrated.timestamp, new Date(1700000000000).toISOString());
+  assert.equal(migrated.type, 'loose');
+  assert.deepEqual(migrated.tabs, [
+    { title: 'First', url: 'https://one.example/#first' },
+    { title: 'https://one.example/#second', url: 'https://one.example/#second' }
+  ]);
+  assert.equal(migrated.note, undefined);
+  assert.deepEqual(result.getItems()[1], current);
+  assert.match(result.getElement('notification-message').textContent, /metadata were not included/);
+  await result.storage.local.set({ stashedItems: [{ ...migrated, title: 'Edited in Stasher' }, current] });
+  await vm.runInContext('handleImport(backupFile)', result.context);
+  assert.equal(result.getItems().length, 2);
+  assert.equal(result.getItems()[0].title, 'Edited in Stasher');
+});
+
+
+test('TheTab migration rejects unsupported versions and malformed or unsafe groups before any write', async () => {
+  const stash = { id: 'existing', tabs: [] };
+  const group = { id: 'g', timestamp: 1700000000000, tabs: [{ url: 'https://safe.example', title: 'Safe' }] };
+  for (const backup of [
+    { version: 2, groups: [group] },
+    { version: 1, groups: [group, { ...group, id: 'bad', timestamp: 'invalid' }] },
+    { version: 1, groups: [group, { ...group, id: 'bad', tabs: [{ url: 'javascript:alert(1)', title: 'Unsafe' }] }] },
+    { version: 1, groups: [{ ...group, tabs: Array(501).fill(group.tabs[0]) }] }
+  ]) {
+    const result = runManager([stash]);
+    result.context.backupFile = new File([JSON.stringify(backup)], 'thetab.json');
+    assert.equal(await vm.runInContext('handleImport(backupFile)', result.context), false);
+    assert.deepEqual(result.getItems(), [stash]);
+    assert.equal(result.storage.writes.length, 0);
+    assert.match(result.getElement('notification-message').textContent, /Nothing was imported/);
+  }
+});

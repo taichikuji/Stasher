@@ -718,8 +718,23 @@ async function handleImport(file = elements.importFile.files[0]) {
   elements.importBtn.disabled = true;
   try {
     const text = await file.text();
-    const isOneTab = /\.txt$/i.test(file.name || '');
-    const importedData = isOneTab ? parseOneTabExport(text) : JSON.parse(text);
+    const isOneTab = /\.txt$/i.test(file.name || '') && !/^\s*[\[{]/.test(text);
+    const parsed = isOneTab ? parseOneTabExport(text) : JSON.parse(text);
+    const isTheTab = Array.isArray(parsed?.groups);
+    if (isTheTab && parsed.version !== 1) throw new Error('Unsupported TheTab backup version. Nothing was imported.');
+    const importedData = isTheTab ? parsed.groups.map(group => {
+      if (!group || !['string', 'number'].includes(typeof group.id) || !Array.isArray(group.tabs) || !Number.isFinite(group.timestamp)) {
+        throw new Error('Invalid TheTab group. Nothing was imported.');
+      }
+      return {
+        id: `thetab:${group.id}`,
+        timestamp: new Date(group.timestamp).toISOString(),
+        type: 'loose',
+        title: typeof group.name === 'string' ? group.name : 'Imported from TheTab',
+        color: 'grey',
+        tabs: group.tabs.map(tab => ({ url: tab?.url, title: typeof tab?.title === 'string' ? tab.title : tab?.url }))
+      };
+    }) : parsed;
     if (!Array.isArray(importedData)) {
       showNotification('Invalid format: expected an array.');
       return;
@@ -731,8 +746,8 @@ async function handleImport(file = elements.importFile.files[0]) {
 
     const valid = importedData.filter(isValidStashItem).map(normalizeImportedItem);
     // OneTab migrations are all-or-nothing so invalid tabs cannot disappear silently.
-    if (isOneTab && valid.length !== importedData.length) {
-      throw new Error(`OneTab export has unsupported URLs or a group exceeds ${CONFIG.MAX_TABS_PER_STASH} tabs. Nothing was imported.`);
+    if ((isOneTab || isTheTab) && valid.length !== importedData.length) {
+      throw new Error(`${isOneTab ? 'OneTab export' : 'TheTab backup'} has unsupported URLs or a group exceeds ${CONFIG.MAX_TABS_PER_STASH} tabs. Nothing was imported.`);
     }
     if (valid.length === 0) {
       showNotification('No valid stash items found in file.');
@@ -741,7 +756,9 @@ async function handleImport(file = elements.importFile.files[0]) {
 
     let added = 0;
     await updateStashItems(currentItems => {
-      const merged = [...valid, ...currentItems];
+      // Foreign IDs are namespaced; repeated migration cannot overwrite current work.
+      const incoming = isTheTab ? valid.filter(item => !currentItems.some(current => current.id === item.id)) : valid;
+      const merged = [...incoming, ...currentItems];
 
       // Remove duplicates based on ID
       const unique = merged.filter((v, i, a) => a.findIndex(t => (t.id === v.id)) === i);
@@ -750,7 +767,7 @@ async function handleImport(file = elements.importFile.files[0]) {
       return unique;
     });
 
-    showNotification(`Imported ${added} new stash${added !== 1 ? 'es' : ''}.`);
+    showNotification(`Imported ${added} new stash${added !== 1 ? 'es' : ''}.${isTheTab ? ' TheTab notes, tags, folders, and native group/pin metadata were not included.' : ''}`);
     return true;
   } catch (err) {
     console.error("Import error:", err);

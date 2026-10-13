@@ -83,7 +83,7 @@
       </div>
     </div>
   </header>
-  <input type="file" id="importFile" accept=".json,.txt" hidden aria-label="Import Stasher JSON or OneTab text file">
+  <input type="file" id="importFile" accept=".json,.txt" hidden aria-label="Import Stasher or TheTab JSON, or OneTab text file">
 
   <main id="stash-container" tabindex="-1" aria-live="polite">
   </main>
@@ -97,9 +97,9 @@
   <dialog id="import-modal" class="modal-overlay" aria-labelledby="import-title" aria-describedby="import-description import-note">
     <div class="modal-box">
       <h2 id="import-title">Import tabs</h2>
-      <p id="import-description" class="modal-description">Coming from OneTab, or another Stasher instance? Welcome!</p>
+      <p id="import-description" class="modal-description">Choose a Stasher or TheTab JSON backup, or paste a OneTab export.</p>
       <form method="dialog">
-        <p class="modal-description"><strong>Importing from Stasher?</strong></p>
+        <p class="modal-description"><strong>Importing from Stasher or TheTab?</strong></p>
         <p class="modal-description"><button value="file" class="secondary">Choose file</button></p>
       </form>
       <p class="modal-description"><label for="onetab-text"><strong>Importing from OneTab?</strong></label></p>

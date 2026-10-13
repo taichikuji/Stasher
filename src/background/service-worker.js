@@ -222,6 +222,12 @@ const handleStash = async (tab, singleTab = false) => {
 
 chrome.action.onClicked.addListener(handleStash);
 
+chrome.commands.onCommand.addListener((command, tab) => {
+  if (command !== 'open-side-panel' || !tab) return;
+  return chrome.sidePanel.open({ windowId: tab.windowId })
+    .catch(error => console.error('Error opening Stasher side panel:', error));
+});
+
 chrome.contextMenus.onClicked.addListener(async (info, tab) => {
   if (info.menuItemId === CONFIG.TAB_MENU_ID && tab) {
     // A tab-strip click stashes exactly the chosen tab, including a pinned tab.

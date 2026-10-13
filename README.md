@@ -86,6 +86,8 @@ Restoring uses existing group permission and never requests it. Renaming or reco
 
 In the manager, search stash names, tab titles, and URLs, rename stashes, change their colors, or remove saved tabs and stashes. The **More actions** (⋮) button opens Help, Export, Import, Settings, and Delete all stashes; click outside or press Escape to close it. Import and export JSON backups to move your stashes between devices. Saved titles and URLs stay in Chrome local storage on this device, with no account or cloud sync.
 
+Press **Alt+A** (**Option+A** on macOS), or right-click **Stasher extension icon → Open side panel**, to open the same manager beside your page. **Alt+S** and the icon continue to stash tabs. Change shortcuts in `chrome://extensions/shortcuts`.
+
 Search highlights literal matches in stash and page titles and reuses the loaded archive while you type. Hover a saved page title to see its full URL. Matching stashes still show all their tabs.
 
 The manager header stays visible while scrolling, keeping search and More actions within reach.

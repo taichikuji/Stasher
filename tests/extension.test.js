@@ -86,6 +86,7 @@ function runBackground(options = {}) {
   const updatedTabs = [];
   const removedTabs = [];
   const contextMenus = [];
+  const openedPanels = [];
   const errors = [];
   const storage = options.storage ?? createStorage({ stashedItems: options.items ?? [], ...options.preferences }, options);
   const sessionStorage = options.sessionStorage ?? createStorage({});
@@ -109,6 +110,8 @@ function runBackground(options = {}) {
     action: {
       onClicked: eventSlot(listeners, 'actionClicked')
     },
+    commands: { onCommand: eventSlot(listeners, 'command') },
+    sidePanel: { open: async details => openedPanels.push(clone(details)) },
     permissions: {
       request: async details => {
         permissionRequests.push(clone(details));
@@ -171,6 +174,7 @@ function runBackground(options = {}) {
     updatedTabs,
     removedTabs,
     contextMenus,
+    openedPanels,
     errors,
     permissionRequests,
     windows,
@@ -1899,11 +1903,14 @@ test('manifest defines a Chromium MV3 service worker', () => {
   assert.match(managerHtml, /<main id="stash-container" tabindex="-1" aria-live="polite">/);
 });
 
-test('manifest defines one browser-managed action shortcut and no options page', () => {
+test('manifest defines native stash and side-panel shortcuts and no options page', () => {
   const manifest = JSON.parse(readFileSync(join(root, 'manifest.json'), 'utf8'));
 
   assert.equal(manifest.options_ui, undefined);
-  assert.deepEqual(Object.keys(manifest.commands), ['_execute_action']);
+  assert.deepEqual(Object.keys(manifest.commands), ['_execute_action', 'open-side-panel']);
+  assert.deepEqual(manifest.commands['open-side-panel'].suggested_key, { default: 'Alt+A', mac: 'Option+A' });
+  assert.equal(manifest.permissions.includes('sidePanel'), true);
+  assert.equal(manifest.side_panel.default_path, 'src/manager/manager.html');
   assert.equal(manifest.commands._execute_action.suggested_key, 'Alt+S');
 });
 
@@ -2056,4 +2063,19 @@ test('stash Undo preserves a reused ID without creating duplicate IDs or replaci
   assert.equal(new Set(result.getItems().map(item => item.id)).size, 2);
   assert.deepEqual(result.getItems().find(item => item.id === 'reused'), imported);
   assert.deepEqual(result.getItems().find(item => item.id !== 'reused').tabs, original.tabs);
+});
+
+
+test('side-panel shortcut opens the current window without stashing and handles failure', async () => {
+  const result = runBackground({ items: [{ id: 'saved', tabs: [] }] });
+  await result.listeners.command('open-side-panel', { windowId: 7 });
+  assert.deepEqual(result.openedPanels, [{ windowId: 7 }]);
+  assert.deepEqual(result.removedTabs, []);
+  assert.deepEqual(result.storage.writes, []);
+  assert.deepEqual(result.permissionRequests, []);
+  await result.listeners.command('open-side-panel');
+  assert.equal(result.openedPanels.length, 1);
+  result.context.chrome.sidePanel.open = async () => { throw new Error('Panel failed'); };
+  await result.listeners.command('open-side-panel', { windowId: 7 });
+  assert.equal(result.errors.length, 1);
 });

@@ -10,6 +10,8 @@ When you choose to stash tabs, Stasher reads their page titles and URLs. When yo
 
 Stasher may request website favicons through Chrome's built-in favicon support to display icons beside saved tabs.
 
+The side-panel permission displays the same local manager beside your current page.
+
 ## Sharing and retention
 
 Stasher does not send saved tab data to Taichikuji or a developer-operated server, and does not sell or share it with third parties. Saved stashes remain in the extension's local storage until you delete them or remove the extension. Collapsed-stash choices are stored locally and cleared when you remove the extension. If you export a stash, the exported file is saved through your browser and is under your control.

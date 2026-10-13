@@ -8,18 +8,24 @@
     "tabs",
     "storage",
     "favicon",
-    "contextMenus"
+    "contextMenus",
+    "sidePanel"
   ],
   "optional_permissions": ["tabGroups"],
   "content_security_policy": {
     "extension_pages": "script-src 'self'; object-src 'none'"
   },
+  "side_panel": { "default_path": "src/manager/manager.html" },
   "action": {
     "default_title": "Click to Stash"
   },
   "commands": {
     "_execute_action": {
       "suggested_key": "Alt+S"
+    },
+    "open-side-panel": {
+      "suggested_key": { "default": "Alt+A", "mac": "Option+A" },
+      "description": "Activate the side panel"
     }
   },
   "background": {

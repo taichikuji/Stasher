@@ -9,6 +9,7 @@ const backgroundSource = readFileSync(
   join(root, 'src/background/service-worker.js'),
   'utf8'
 );
+const searchSource = readFileSync(join(root, 'src/shared/search.js'), 'utf8');
 const managerSource = readFileSync(
   join(root, 'src/manager/manager.js'),
   'utf8'
@@ -106,6 +107,12 @@ function runBackground(options = {}) {
       getAll: async () => clone(windows.filter(w => w.type === 'normal')),
       onCreated: eventSlot(listeners, 'windowCreated')
     },
+    omnibox: {
+      setDefaultSuggestion: () => {},
+      onInputChanged: eventSlot(listeners, 'searchChanged'),
+      onInputEntered: eventSlot(listeners, 'searchEntered'),
+      onInputCancelled: eventSlot(listeners, 'searchCancelled')
+    },
     action: {
       onClicked: eventSlot(listeners, 'actionClicked')
     },
@@ -144,6 +151,7 @@ function runBackground(options = {}) {
         return tab;
       },
       update: async (id, details) => {
+        if (typeof id === 'object') { details = id; id = 77; }
         const tab = { id, ...clone(details) };
         updatedTabs.push(tab);
         return tab;
@@ -159,7 +167,8 @@ function runBackground(options = {}) {
     console: { error: (...args) => errors.push(args) },
     crypto: { randomUUID: () => nextStashId++ === 1 ? 'stash-id' : `stash-id-${nextStashId - 1}` },
     navigator: { locks: storage.locks },
-    URL
+    URL,
+    importScripts: () => vm.runInContext(searchSource, context)
   });
   vm.runInContext(backgroundSource, context);
 
@@ -301,6 +310,9 @@ function runManager(initialItems, options = {}) {
     Blob,
     File,
     URL,
+    URLSearchParams,
+    location: { hash: options.hash || '' },
+    addEventListener: (name, listener) => { documentListeners[name] = listener; },
     clearTimeout: id => timers.delete(id),
     console: { error: (...args) => errors.push(args) },
     crypto: { randomUUID: () => `import-id-${nextImportId++}` },
@@ -318,6 +330,7 @@ function runManager(initialItems, options = {}) {
     },
     structuredClone
   });
+  vm.runInContext(searchSource, context);
   vm.runInContext(managerSource, context);
 
   return {
@@ -1887,4 +1900,86 @@ test('manifest defines one browser-managed action shortcut and no options page',
   assert.equal(manifest.options_ui, undefined);
   assert.deepEqual(Object.keys(manifest.commands), ['_execute_action']);
   assert.equal(manifest.commands._execute_action.suggested_key, 'Alt+S');
+});
+
+
+test('omnibox shares stash-name ranking, deduplicates results, limits suggestions and escapes descriptions', async () => {
+  const result = runBackground({ items: [{ id: 'project', title: 'Project <work>', tabs: [
+    { title: 'First & second', url: 'https://one.example/#first' },
+    { title: 'Duplicate', url: 'https://one.example/#first' },
+    { title: 'Unsafe', url: 'javascript:alert(1)' },
+    ...Array.from({length: 6}, (_, i) => ({ title: 'Page ' + i, url: 'https://example.com/' + i }))
+  ] }] });
+  let suggestions;
+  await result.listeners.searchChanged('project', values => { suggestions = clone(values); });
+  assert.equal(suggestions.length, 5);
+  assert.equal(suggestions[0].content, 'https://one.example/#first');
+  assert.equal(suggestions[0].description, 'First &amp; second — Project &lt;work&gt;');
+  assert.equal(new Set(suggestions.map(item => item.content)).size, 5);
+  assert.equal(result.storage.writes.length, 0);
+});
+
+
+test('omnibox ignores stale reads and cancelled queries and returns an empty result on storage failure', async () => {
+  const result = runBackground();
+  const pending = [];
+  result.storage.local.get = () => new Promise(resolve => pending.push(resolve));
+  const suggestions = [];
+  const older = result.listeners.searchChanged('old', values => suggestions.push(clone(values)));
+  const newer = result.listeners.searchChanged('new', values => suggestions.push(clone(values)));
+  pending[1]({ stashedItems: [{ id: 'new', title: 'New', tabs: [{ title: 'New', url: 'https://new.example' }] }] });
+  await newer;
+  pending[0]({ stashedItems: [{ id: 'old', title: 'Old', tabs: [{ title: 'Old', url: 'https://old.example' }] }] });
+  await older;
+  assert.equal(suggestions.length, 1);
+  assert.equal(suggestions[0][0].content, 'https://new.example');
+  const cancelled = result.listeners.searchChanged('later', values => suggestions.push(values));
+  result.listeners.searchCancelled();
+  pending[2]({ stashedItems: [] });
+  await cancelled;
+  assert.equal(suggestions.length, 1);
+  const failed = runBackground({ failStorageGetKey: 'stashedItems' });
+  let empty;
+  await failed.listeners.searchChanged('query', values => { empty = values; });
+  assert.deepEqual(clone(empty), []);
+});
+
+
+test('omnibox respects tab disposition and sends unsafe or unmatched text to a manager query', async () => {
+  for (const disposition of ['currentTab', 'newForegroundTab', 'newBackgroundTab']) {
+    const result = runBackground();
+    await result.listeners.searchEntered('https://one.example/#part', disposition);
+    if (disposition === 'currentTab') assert.deepEqual(result.updatedTabs, [{ id: 77, url: 'https://one.example/#part' }]);
+    else assert.deepEqual(result.createdTabs, [{ id: 100, url: 'https://one.example/#part', active: disposition === 'newForegroundTab' }]);
+    await result.listeners.searchEntered('javascript:alert(1)', 'newForegroundTab');
+    assert.equal(result.createdTabs.at(-1).url, 'chrome-extension://stasher/src/manager/manager.html#search=javascript%3Aalert(1)');
+    assert.equal(result.storage.writes.length, 0);
+  }
+});
+
+
+test('search fragments do not make the manager stashable or create duplicate managers', async () => {
+  const manager = 'chrome-extension://stasher/src/manager/manager.html#search=Work';
+  const result = runBackground({
+    looseTabs: [{ id: 1, url: manager }, { id: 2, url: 'https://one.example' }],
+    windowTabs: [{ id: 1, url: manager, windowId: 4 }]
+  });
+  await result.listeners.actionClicked({ id: 2, windowId: 4, groupId: -1 });
+  assert.deepEqual(result.removedTabs, [2]);
+  assert.deepEqual(result.createdTabs, []);
+  assert.deepEqual(result.updatedTabs, [{ id: 1, active: true, pinned: true }]);
+  const manifest = JSON.parse(readFileSync(join(root, 'manifest.json'), 'utf8'));
+  assert.equal(manifest.omnibox.keyword, 'stash');
+});
+
+
+
+test('the manager receives and updates a hash search from the address bar', async () => {
+  const result = runManager([{ id: 'work', title: 'Work', tabs: [] }], { hash: '#search=Work' });
+  await vm.runInContext('loadStashes()', result.context);
+  assert.equal(result.getElement('searchInput').value, 'Work');
+  result.context.location.hash = '#search=Missing';
+  await result.triggerDocumentEvent('hashchange', {});
+  assert.equal(result.getElement('searchInput').value, 'Missing');
+  assert.equal(result.getElement('stash-container').children[0].textContent, 'No stashes match your search.');
 });

@@ -1,3 +1,5 @@
+importScripts('../shared/search.js');
+
 // Background owner of privileged tab, group, storage, and context-menu work.
 // It persists all user data because Manifest V3 service workers can stop at any time.
 
@@ -15,6 +17,7 @@ const CONFIG = {
 
 const MANAGER_URL = chrome.runtime.getURL(CONFIG.MANAGER_PATH);
 const UNGROUPED_ID = -1;
+const isManagerUrl = url => typeof url === 'string' && url.split(/[?#]/, 1)[0] === MANAGER_URL;
 
 /**
  * Opens or focuses the Stasher manager tab.
@@ -24,7 +27,7 @@ const UNGROUPED_ID = -1;
 const openManager = async (windowId, active = true) => {
   // Check if manager is already open in this window
   const tabs = await chrome.tabs.query({ windowId });
-  const managerTab = tabs.find(t => t.url === MANAGER_URL || t.pendingUrl === MANAGER_URL);
+  const managerTab = tabs.find(t => isManagerUrl(t.url) || isManagerUrl(t.pendingUrl));
 
   if (managerTab) {
     // Pin the existing manager, selecting it for manual actions.
@@ -53,7 +56,7 @@ const openStartupManager = async window => {
     // Session-restored tabs may expose only pendingUrl while loading.
     const tabs = await chrome.tabs.query({ windowType: 'normal' });
     const existing = tabs.find(tab => !tab.incognito &&
-      (tab.url === MANAGER_URL || tab.pendingUrl === MANAGER_URL));
+      (isManagerUrl(tab.url) || isManagerUrl(tab.pendingUrl)));
     if (existing) await chrome.tabs.update(existing.id, { pinned: true });
     else await openManager(window.id, false);
   } catch (error) {
@@ -120,7 +123,7 @@ const filterStashableTabs = (tabs, allowPinned = false) => {
   return tabs.filter(t => {
     if (
       (!allowPinned && t.pinned) ||
-      t.url === MANAGER_URL ||
+      isManagerUrl(t.url) ||
       CONFIG.IGNORED_URLS.includes(t.url)
     ) return false;
     try {
@@ -226,5 +229,47 @@ chrome.contextMenus.onClicked.addListener(async (info, tab) => {
   if (info.menuItemId === CONFIG.TAB_MENU_ID && tab) {
     // A tab-strip click stashes exactly the chosen tab, including a pinned tab.
     await handleStash(tab, true);
+  }
+});
+
+
+let searchRevision = 0;
+const escapeDescription = value => String(value).replace(/[&<>"']/g, character => ({
+  '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&apos;'
+})[character]);
+chrome.omnibox.setDefaultSuggestion({ description: 'Search saved tabs in Stasher' });
+chrome.omnibox.onInputChanged.addListener(async (query, suggest) => {
+  const revision = ++searchRevision;
+  const normalized = query.trim().toLocaleLowerCase();
+  if (!normalized) { suggest([]); return; }
+  try {
+    const { stashedItems } = await chrome.storage.local.get({ stashedItems: [] });
+    if (revision !== searchRevision) return;
+    const results = [];
+    search: for (const stash of rankStashesByQuery(Array.isArray(stashedItems) ? stashedItems : [], query)) {
+      const nameMatches = String(stash.title || '').toLocaleLowerCase().includes(normalized);
+      for (const tab of filterStashableTabs(Array.isArray(stash.tabs) ? stash.tabs : [], true)) {
+        if (!nameMatches && !String(tab.title || '').toLocaleLowerCase().includes(normalized) && !tab.url.toLocaleLowerCase().includes(normalized)) continue;
+        if (results.some(result => result.content === tab.url)) continue;
+        results.push({ content: tab.url, description: escapeDescription(`${tab.title || tab.url} — ${stash.title || 'Stash'}`) });
+        if (results.length === 5) break search;
+      }
+    }
+    suggest(results);
+  } catch (error) {
+    console.error('Error searching saved tabs:', error);
+    if (revision === searchRevision) suggest([]);
+  }
+});
+chrome.omnibox.onInputCancelled.addListener(() => { searchRevision++; });
+chrome.omnibox.onInputEntered.addListener(async (content, disposition) => {
+  searchRevision++;
+  const url = filterStashableTabs([{ url: content }], true).length
+    ? content : `${MANAGER_URL}#search=${encodeURIComponent(content)}`;
+  try {
+    if (disposition === 'currentTab') await chrome.tabs.update({ url });
+    else await chrome.tabs.create({ url, active: disposition !== 'newBackgroundTab' });
+  } catch (error) {
+    console.error('Error opening search result:', error);
   }
 });

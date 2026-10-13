@@ -92,8 +92,13 @@ const preferenceInputs = Object.fromEntries(Object.keys(PREFERENCE_DEFAULTS)
 const iconMarkup = (name) =>
   `<svg class="button-icon" aria-hidden="true"><use href="#icon-${name}"></use></svg>`;
 
-// Initial Load
-loadStashes();
+// A keyword search can open a manager with a prefilled query.
+const readSearch = () => {
+  elements.searchInput.value = new URLSearchParams(location.hash.slice(1)).get('search') || '';
+  return loadStashes();
+};
+readSearch();
+addEventListener('hashchange', readSearch);
 
 // Listen for local storage changes to update UI
 chrome.storage.onChanged.addListener((changes, namespace) => {
@@ -145,24 +150,6 @@ async function loadStashes() {
     p.textContent = 'Error loading content.';
     elements.container.appendChild(p);
   }
-}
-
-function rankStashesByQuery(items, query) {
-  const normalizedQuery = String(query || '').trim().toLocaleLowerCase();
-  if (!normalizedQuery) return items;
-
-  const matches = value =>
-    typeof value === 'string' && value.toLocaleLowerCase().includes(normalizedQuery);
-  const ranked = [[], [], []];
-
-  for (const item of items) {
-    const tabs = Array.isArray(item?.tabs) ? item.tabs : [];
-    if (matches(item?.title)) ranked[0].push(item);
-    else if (tabs.some(tab => matches(tab?.title))) ranked[1].push(item);
-    else if (tabs.some(tab => matches(tab?.url))) ranked[2].push(item);
-  }
-
-  return ranked.flat();
 }
 
 /**

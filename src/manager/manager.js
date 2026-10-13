@@ -114,33 +114,42 @@ chrome.storage.onChanged.addListener((changes, namespace) => {
 // Setup Event Listeners
 setupEventListeners();
 
-async function loadStashes() {
-  const revision = ++state.loadRevision;
+async function loadStashes(items) {
+  const revision = items ? state.loadRevision : ++state.loadRevision;
   try {
-    const items = await getStashItems();
+    // Rebuild instead of patching individual cards so storage changes from any
+    // extension context produce one consistent view.
+    items ??= await getStashItems();
     if (revision !== state.loadRevision) return;
     state.items = items;
-    renderStashes();
+    elements.container.innerHTML = '';
+
+    if (items.length === 0) {
+      const p = document.createElement('p');
+      p.className = 'empty-state';
+      p.textContent = 'No tabs stashed yet.';
+      elements.container.appendChild(p);
+      return;
+    }
+
+    const visibleItems = rankStashesByQuery(items, elements.searchInput.value);
+    if (visibleItems.length === 0) {
+      const p = document.createElement('p');
+      p.className = 'empty-state';
+      p.textContent = 'No stashes match your search.';
+      elements.container.appendChild(p);
+      return;
+    }
+
+    elements.container.append(...visibleItems.map(createStashCard));
+
   } catch (error) {
     if (revision !== state.loadRevision) return;
-    console.error('Error loading stashes:', error);
+    console.error("Error loading stashes:", error);
     const p = document.createElement('p');
     p.className = 'error-state';
-    p.textContent = 'Could not load your stashes. Reload this page to try again.';
-    elements.container.replaceChildren(p);
-  }
-}
-
-function renderStashes() {
-  const items = state.items || [];
-  const visibleItems = rankStashesByQuery(items, elements.searchInput.value);
-  if (visibleItems.length) {
-    elements.container.replaceChildren(...visibleItems.map(createStashCard));
-  } else {
-    const p = document.createElement('p');
-    p.className = 'empty-state';
-    p.textContent = items.length ? 'No stashes match your search.' : 'No tabs stashed yet. Click the Stasher icon or press Alt+S to get started.';
-    elements.container.replaceChildren(p);
+    p.textContent = 'Error loading content.';
+    elements.container.appendChild(p);
   }
 }
 
@@ -174,7 +183,6 @@ function highlightText(element, value) {
     ? Object.assign(document.createElement('mark'), { textContent: part })
     : document.createTextNode(part)));
 }
-
 
 /**
  * Creates the DOM element for a stash card.
@@ -807,7 +815,7 @@ function setupEventListeners() {
     input.addEventListener('change', () => savePreference(key));
   }
   elements.importFile.onchange = () => handleImport();
-  elements.searchInput.oninput = () => state.items ? renderStashes() : loadStashes();
+  elements.searchInput.oninput = () => loadStashes(state.items);
   document.addEventListener('keydown', event => {
     if (event.key === 'f' && (event.metaKey || event.ctrlKey)) {
       event.preventDefault();

@@ -85,8 +85,7 @@
   </header>
   <input type="file" id="importFile" accept=".json,.txt" hidden aria-label="Import Stasher JSON or OneTab text file">
 
-  <main id="stash-container" tabindex="-1">
-    <p class="empty-state">Loading your stashes…</p>
+  <main id="stash-container" tabindex="-1" aria-live="polite">
   </main>
 
   <div id="notification" popover="manual" role="status" aria-atomic="true">

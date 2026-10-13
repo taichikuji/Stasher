@@ -1880,7 +1880,7 @@ test('manifest defines a Chromium MV3 service worker', () => {
   assert.equal(manifest.permissions.includes('contextMenus'), true);
   assert.equal(manifest.permissions.includes('tabGroups'), false);
   assert.deepEqual(manifest.optional_permissions, ['tabGroups']);
-  assert.match(managerHtml, /<main id="stash-container" tabindex="-1">/);
+  assert.match(managerHtml, /<main id="stash-container" tabindex="-1" aria-live="polite">/);
 });
 
 test('manifest defines one browser-managed action shortcut and no options page', () => {
@@ -1932,4 +1932,18 @@ test('a late archive read cannot overwrite a newer storage change', async () => 
   pending[0]({ stashedItems: [{ id: 'old', title: 'Old', tabs: [] }] });
   await older;
   assert.equal(vm.runInContext('state.items[0].id', result.context), 'new');
+});
+
+test('cached typing does not cancel a pending storage refresh', async () => {
+  const result = runManager([{ id: 'old', title: 'Old', tabs: [] }]);
+  await vm.runInContext('loadStashes()', result.context);
+  let resolveRead;
+  result.storage.local.get = () => new Promise(resolve => { resolveRead = resolve; });
+  const refreshing = vm.runInContext('loadStashes()', result.context);
+  result.getElement('searchInput').value = 'new';
+  await result.getElement('searchInput').oninput();
+  resolveRead({ stashedItems: [{ id: 'new', title: 'New', tabs: [] }] });
+  await refreshing;
+  assert.equal(vm.runInContext('state.items[0].id', result.context), 'new');
+  assert.equal(result.getElement('stash-container').children[0].children[0].children[1].children.map(part => part.textContent).join(''), 'New');
 });

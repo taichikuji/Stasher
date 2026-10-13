@@ -88,6 +88,8 @@ In the manager, search stash names, tab titles, and URLs, rename stashes, change
 
 Search highlights literal matches in stash and page titles and reuses the loaded archive while you type. Hover a saved page title to see its full URL. Matching stashes still show all their tabs.
 
+The manager header stays visible while scrolling, keeping search and More actions within reach.
+
 ### Settings
 
 Open **More actions → Settings**. Changes save automatically on this device and synchronize between open manager tabs. All four switches default off:

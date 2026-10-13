@@ -23,6 +23,7 @@ const PREFERENCE_DEFAULTS = {
 
 // State Management
 const state = {
+  items: null,
   collapsedIds: new Set(),
   loadRevision: 0,
   undoStack: [],
@@ -115,17 +116,21 @@ chrome.storage.onChanged.addListener((changes, namespace) => {
 // Setup Event Listeners
 setupEventListeners();
 
-async function loadStashes() {
-  const revision = ++state.loadRevision;
+async function loadStashes(items) {
+  const revision = items ? state.loadRevision : ++state.loadRevision;
   try {
     // Rebuild instead of patching individual cards so storage changes from any
     // extension context produce one consistent view.
-    const values = await chrome.storage.local.get({ [CONFIG.STORAGE_KEY]: [], collapsedStashIds: [] });
-    if (revision !== state.loadRevision) return;
-    const items = Array.isArray(values[CONFIG.STORAGE_KEY]) ? values[CONFIG.STORAGE_KEY] : [];
-    state.collapsedIds = new Set(Array.isArray(values.collapsedStashIds) ? values.collapsedStashIds : []);
+    if (!items) {
+      const values = await chrome.storage.local.get({ [CONFIG.STORAGE_KEY]: [], collapsedStashIds: [] });
+      if (revision !== state.loadRevision) return;
+      items = Array.isArray(values[CONFIG.STORAGE_KEY]) ? values[CONFIG.STORAGE_KEY] : [];
+      state.collapsedIds = new Set(Array.isArray(values.collapsedStashIds) ? values.collapsedStashIds : []);
+    }
+    state.items = items;
     elements.collapseAllBtn.disabled = items.length === 0;
-    elements.collapseAllBtn.textContent = items.some(item => !state.collapsedIds.has(item.id)) ? 'Collapse all stashes' : 'Expand all stashes';
+    const action = items.some(item => !state.collapsedIds.has(item.id)) ? 'Collapse all stashes' : 'Expand all stashes';
+    elements.collapseAllBtn.innerHTML = iconMarkup('down') + action;
     elements.container.innerHTML = '';
 
     if (items.length === 0) {
@@ -173,6 +178,19 @@ function rankStashesByQuery(items, query) {
   }
 
   return ranked.flat();
+}
+
+// Create elements instead of inserting page titles or imported text as HTML.
+function highlightText(element, value) {
+  const text = String(value || '');
+  const query = elements.searchInput.value.trim();
+  element.textContent = text;
+  if (!query) return;
+  const escaped = query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const parts = text.split(new RegExp(`(${escaped})`, 'gi'));
+  element.replaceChildren(...parts.map((part, index) => index % 2
+    ? Object.assign(document.createElement('mark'), { textContent: part })
+    : document.createTextNode(part)));
 }
 
 /**
@@ -249,7 +267,8 @@ function createTabListItem(tab, stashId, tabIndex) {
 
   const a = document.createElement('a');
   a.href = url;
-  a.textContent = tab.title || url;
+  a.title = url;
+  highlightText(a, tab.title || url);
   a.target = '_blank';
   a.rel = 'noopener noreferrer';
 
@@ -334,7 +353,7 @@ function renderViewMode(container, item) {
   // 1. Badge
   const badge = document.createElement('h2');
   badge.className = `group-badge color-${safeColor(item.color)}`;
-  badge.textContent = item.title || (item.type === 'group' ? 'Untitled Group' : 'Ungrouped Tabs');
+  highlightText(badge, item.title || (item.type === 'group' ? 'Untitled Group' : 'Ungrouped Tabs'));
   badge.style.cursor = 'pointer';
   badge.addEventListener('dblclick', async () => {
     try {
@@ -809,11 +828,10 @@ function setupEventListeners() {
     input.addEventListener('change', () => savePreference(key));
   }
   elements.importFile.onchange = () => handleImport();
-  elements.searchInput.oninput = loadStashes;
-  elements.collapseAllBtn.onclick = async () => {
-    const items = await getStashItems();
-    return setCollapsed(items.map(item => item.id), items.some(item => !state.collapsedIds.has(item.id)));
-  };
+  elements.searchInput.oninput = () => loadStashes(state.items);
+  elements.collapseAllBtn.onclick = () => setCollapsed(
+    state.items.map(item => item.id), state.items.some(item => !state.collapsedIds.has(item.id))
+  );
   document.addEventListener('keydown', event => {
     if (event.key === 'f' && (event.metaKey || event.ctrlKey)) {
       event.preventDefault();

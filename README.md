@@ -86,6 +86,10 @@ Restoring uses existing group permission and never requests it. Renaming or reco
 
 In the manager, search stash names, tab titles, and URLs, rename stashes, change their colors, or remove saved tabs and stashes. The **More actions** (⋮) button opens Help, Export, Import, Settings, and Delete all stashes; click outside or press Escape to close it. Import and export JSON backups to move your stashes between devices. Saved titles and URLs stay in Chrome local storage on this device, with no account or cloud sync.
 
+Search highlights literal matches in stash and page titles and reuses the loaded archive while you type. Hover a saved page title to see its full URL. Matching stashes still show all their tabs.
+
+The manager header stays visible while scrolling, keeping search and More actions within reach.
+
 **More actions → Collapse all stashes / Expand all stashes** gives a quick overview. Collapse choices persist after closing the manager and restarting the browser, synchronize between open managers, and do not change saved tabs. Collapsed stashes create their tab rows only when expanded.
 
 ### Settings

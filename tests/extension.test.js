@@ -183,6 +183,7 @@ function createElement(initialClasses = []) {
   const classes = new Set(initialClasses);
   const listeners = new Map();
   const element = {
+    value: '',
     children: [],
     append(...children) {
       this.children.push(...children);
@@ -292,6 +293,7 @@ function runManager(initialItems, options = {}) {
       return elements.get(id);
     },
     createElement,
+    createTextNode: text => ({ textContent: text }),
     querySelector: () => null
   };
 
@@ -1890,36 +1892,85 @@ test('manifest defines one browser-managed action shortcut and no options page',
 });
 
 
-test('collapse choices survive closing the manager and collapsed rows stay lazy', async () => {
-  const stash = { id: 'lazy', tabs: [{ title: 'One', url: 'https://one.example' }] };
-  const result = runManager([stash]);
-  await vm.runInContext('loadStashes()', result.context);
-  await result.getElement('collapseAllBtn').onclick();
-  assert.deepEqual(result.storage.snapshot().collapsedStashIds, ['lazy']);
-  const reopened = runManager([], { storage: result.storage });
-  await vm.runInContext('loadStashes()', reopened.context);
-  assert.equal(reopened.getElement('stash-container').children[0].children[1].children.length, 0);
-  const header = reopened.getElement('stash-container').children[0].children[0];
-  await header.children[0].onclick();
-  const list = reopened.getElement('stash-container').children[0].children[1];
-  assert.equal(list.children.length, 1);
-  await reopened.getElement('collapseAllBtn').onclick();
-  assert.equal(reopened.getElement('stash-container').children[0].children[1].children.length, 0);
-  assert.deepEqual(result.getItems(), [stash]);
+test('highlights literal queries without turning saved titles into markup', () => {
+  const result = runManager([]);
+  result.context.document.createElement = tag => Object.assign(createElement(), { tagName: tag });
+  result.getElement('searchInput').value = '[a]';
+  result.context.label = createElement();
+  vm.runInContext("highlightText(label, '<img src=x> [A] and [a]')", result.context);
+  assert.deepEqual(result.context.label.children.filter(part => part.tagName === 'mark').map(part => part.textContent), ['[A]', '[a]']);
+  assert.equal(result.context.label.children.map(part => part.textContent).join(''), '<img src=x> [A] and [a]');
 });
 
 
-test('collapse state synchronizes and failed writes leave the view unchanged', async () => {
+test('search uses the loaded archive without mutating or rereading storage', async () => {
+  const stash = { id: 'found', title: 'Needle', tabs: [
+    { title: 'One', url: 'https://one.example' }, { title: 'Two', url: 'https://two.example' }
+  ] };
+  const result = runManager([stash, { id: 'other', title: 'Other', tabs: [] }]);
+  await vm.runInContext('loadStashes()', result.context);
+  let reads = 0;
+  const get = result.storage.local.get;
+  result.storage.local.get = query => { reads++; return get(query); };
+  result.getElement('searchInput').value = 'needle';
+  await result.getElement('searchInput').oninput();
+  assert.equal(reads, 0);
+  assert.equal(result.getElement('stash-container').children.length, 1);
+  assert.equal(result.storage.writes.length, 0);
+});
+
+
+test('a late archive read cannot overwrite a newer storage change', async () => {
+  const result = runManager([]);
+  await vm.runInContext('loadStashes()', result.context);
+  const pending = [];
+  result.storage.local.get = () => new Promise(resolve => pending.push(resolve));
+  const older = vm.runInContext('loadStashes()', result.context);
+  const newer = vm.runInContext('loadStashes()', result.context);
+  pending[1]({ stashedItems: [{ id: 'new', title: 'New', tabs: [] }] });
+  await newer;
+  pending[0]({ stashedItems: [{ id: 'old', title: 'Old', tabs: [] }] });
+  await older;
+  assert.equal(vm.runInContext('state.items[0].id', result.context), 'new');
+});
+
+test('cached typing does not cancel a pending storage refresh', async () => {
+  const result = runManager([{ id: 'old', title: 'Old', tabs: [] }]);
+  await vm.runInContext('loadStashes()', result.context);
+  let resolveRead;
+  result.storage.local.get = () => new Promise(resolve => { resolveRead = resolve; });
+  const refreshing = vm.runInContext('loadStashes()', result.context);
+  result.getElement('searchInput').value = 'new';
+  await result.getElement('searchInput').oninput();
+  resolveRead({ stashedItems: [{ id: 'new', title: 'New', tabs: [] }] });
+  await refreshing;
+  assert.equal(vm.runInContext('state.items[0].id', result.context), 'new');
+  assert.equal(result.getElement('stash-container').children[0].children[0].children[1].children.map(part => part.textContent).join(''), 'New');
+});
+
+test('collapse choices survive reopening and collapsed rows stay lazy', async () => {
+  const stash = { id: 'lazy', tabs: [{ title: 'One', url: 'https://one.example' }] };
+  const first = runManager([stash]);
+  await vm.runInContext('loadStashes()', first.context);
+  await first.getElement('collapseAllBtn').onclick();
+  const reopened = runManager([], { storage: first.storage });
+  await vm.runInContext('loadStashes()', reopened.context);
+  const card = () => reopened.getElement('stash-container').children[0];
+  assert.equal(card().children[1].children.length, 0);
+  await card().children[0].children[0].onclick();
+  assert.equal(card().children[1].children.length, 1);
+  assert.deepEqual(first.getItems(), [stash]);
+});
+
+test('collapse synchronizes automatically and a failed save leaves tabs visible', async () => {
   const stash = { id: 'collapse', tabs: [{ title: 'One', url: 'https://one.example' }] };
   const storage = createStorage({ stashedItems: [stash] });
-  const first = runManager([], { storage });
-  const second = runManager([], { storage });
+  const first = runManager([], { storage }), second = runManager([], { storage });
   await Promise.all([vm.runInContext('loadStashes()', first.context), vm.runInContext('loadStashes()', second.context)]);
   await first.getElement('collapseAllBtn').onclick();
-  await vm.runInContext('loadStashes()', second.context);
   assert.equal(second.getElement('stash-container').children[0].children[1].children.length, 0);
   await second.getElement('collapseAllBtn').onclick();
-  assert.deepEqual(storage.snapshot().collapsedStashIds, []);
+  assert.equal(first.getElement('stash-container').children[0].children[1].children.length, 1);
   const failed = runManager([stash], { failStorageSetAt: 1 });
   await vm.runInContext('loadStashes()', failed.context);
   await failed.getElement('collapseAllBtn').onclick();

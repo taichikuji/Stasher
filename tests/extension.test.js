@@ -1947,3 +1947,33 @@ test('cached typing does not cancel a pending storage refresh', async () => {
   assert.equal(vm.runInContext('state.items[0].id', result.context), 'new');
   assert.equal(result.getElement('stash-container').children[0].children[0].children[1].children.map(part => part.textContent).join(''), 'New');
 });
+
+test('collapse choices survive reopening and collapsed rows stay lazy', async () => {
+  const stash = { id: 'lazy', tabs: [{ title: 'One', url: 'https://one.example' }] };
+  const first = runManager([stash]);
+  await vm.runInContext('loadStashes()', first.context);
+  await first.getElement('collapseAllBtn').onclick();
+  const reopened = runManager([], { storage: first.storage });
+  await vm.runInContext('loadStashes()', reopened.context);
+  const card = () => reopened.getElement('stash-container').children[0];
+  assert.equal(card().children[1].children.length, 0);
+  await card().children[0].children[0].onclick();
+  assert.equal(card().children[1].children.length, 1);
+  assert.deepEqual(first.getItems(), [stash]);
+});
+
+test('collapse synchronizes automatically and a failed save leaves tabs visible', async () => {
+  const stash = { id: 'collapse', tabs: [{ title: 'One', url: 'https://one.example' }] };
+  const storage = createStorage({ stashedItems: [stash] });
+  const first = runManager([], { storage }), second = runManager([], { storage });
+  await Promise.all([vm.runInContext('loadStashes()', first.context), vm.runInContext('loadStashes()', second.context)]);
+  await first.getElement('collapseAllBtn').onclick();
+  assert.equal(second.getElement('stash-container').children[0].children[1].children.length, 0);
+  await second.getElement('collapseAllBtn').onclick();
+  assert.equal(first.getElement('stash-container').children[0].children[1].children.length, 1);
+  const failed = runManager([stash], { failStorageSetAt: 1 });
+  await vm.runInContext('loadStashes()', failed.context);
+  await failed.getElement('collapseAllBtn').onclick();
+  assert.equal(failed.getElement('stash-container').children[0].children[1].children.length, 1);
+  assert.match(failed.getElement('notification-message').textContent, /Could not save collapsed/);
+});

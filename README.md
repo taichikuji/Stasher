@@ -90,6 +90,8 @@ Search highlights literal matches in stash and page titles and reuses the loaded
 
 The manager header stays visible while scrolling, keeping search and More actions within reach.
 
+**More actions → Collapse all stashes / Expand all stashes** gives a quick overview. Collapse choices persist after closing the manager and restarting the browser, synchronize between open managers, and do not change saved tabs. Collapsed stashes create their tab rows only when expanded.
+
 ### Settings
 
 Open **More actions → Settings**. Changes save automatically on this device and synchronize between open manager tabs. All four switches default off:

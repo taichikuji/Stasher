@@ -17,6 +17,7 @@ const CONFIG = {
 const PREFERENCE_DEFAULTS = {
   openOnStartup: false,
   keepAfterRestore: false,
+  restoreInNewWindow: false,
   skipDuplicates: false,
   editOnDoubleClick: false
 };
@@ -525,14 +526,25 @@ async function restoreGroup(item, preferences) {
       await chrome.permissions.contains({ permissions: ['tabGroups'] });
 
     // 1. Create tabs in order so a failed restore leaves no requests running.
-    for (const t of tabs) {
-      const tab = await chrome.tabs.create({ url: t.url, active: false });
-      tabIds.push(tab.id);
+    let windowId;
+    if (preferences.restoreInNewWindow) {
+      const window = await chrome.windows.create({ url: tabs.map(tab => tab.url), focused: true });
+      if (!Number.isInteger(window?.id) || window.tabs?.length !== tabs.length) throw new Error('Could not create restore window');
+      windowId = window.id;
+      tabIds.push(...window.tabs.map(tab => tab.id));
+    } else {
+      for (const t of tabs) {
+        const tab = await chrome.tabs.create({ url: t.url, active: false });
+        tabIds.push(tab.id);
+      }
     }
 
     if (canRestoreGroup) {
-      // 2. Create Group
-      const groupId = await chrome.tabs.group({ tabIds });
+      // Without an explicit destination, grouping moves the tabs back to this manager's window.
+      const groupId = await chrome.tabs.group({
+        tabIds,
+        ...(windowId !== undefined ? { createProperties: { windowId } } : {})
+      });
 
       // 3. Apply Properties
       await chrome.tabGroups.update(groupId, {

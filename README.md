@@ -92,14 +92,17 @@ The manager header stays visible while scrolling, keeping search and More action
 
 **More actions → Collapse all stashes / Expand all stashes** gives a quick overview. Collapse choices persist after closing the manager and restarting the browser, synchronize between open managers, and do not change saved tabs. Collapsed stashes create their tab rows only when expanded.
 
+Enable **Restore stashes in a new window** in Settings to open all saved pages in one native window without a spare blank tab. The restore button and title double-click both follow this setting. Recreated browser groups stay in that window.
+
 ### Settings
 
-Open **More actions → Settings**. Changes save automatically on this device and synchronize between open manager tabs. All four switches default off:
+Open **More actions → Settings**. Changes save automatically on this device and synchronize between open manager tabs. All five switches default off:
 
 | Setting | Default behavior |
 | --- | --- |
 | Open Stasher on browser startup | Does not open automatically. |
 | Keep tabs after restoration | Removes the saved stash after successful restoration. |
+| Restore stashes in a new window | Restores into the current window. |
 | Skip duplicate tabs when stashing | Duplicate tabs are allowed. |
 | Double-click stash titles to edit | Double-click restores the stash. |
 

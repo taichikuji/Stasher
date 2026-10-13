@@ -183,6 +183,7 @@ function createElement(initialClasses = []) {
   const classes = new Set(initialClasses);
   const listeners = new Map();
   const element = {
+    value: '',
     children: [],
     append(...children) {
       this.children.push(...children);
@@ -234,6 +235,7 @@ function createElement(initialClasses = []) {
 function runManager(initialItems, options = {}) {
   const documentListeners = {};
   const createdTabs = [];
+  const createdWindows = [];
   const errors = [];
   const groupedTabs = [];
   const updatedGroups = [];
@@ -251,6 +253,17 @@ function runManager(initialItems, options = {}) {
       getURL: path => `chrome-extension://stasher/${path}`
     },
     storage,
+    windows: {
+      create: async details => {
+        if (options.failWindowCreation) throw new Error('Window creation failed');
+        const opened = (Array.isArray(details.url) ? details.url : [details.url]).map(url => ({ id: nextTabId++, url, windowId: 7 }));
+        opened.forEach(tab => tabs.set(tab.id, tab));
+        const window = { id: 7, tabs: opened, ...clone(details) };
+        createdWindows.push(window);
+        if (options.missingWindowTabs) delete window.tabs;
+        return clone(window);
+      }
+    },
     permissions: {
       contains: async () => options.groupPermissionGranted !== false
     },
@@ -267,7 +280,10 @@ function runManager(initialItems, options = {}) {
       group: async details => {
         if (options.failTabGrouping) throw new Error('Tab grouping failed');
         groupedTabs.push(clone(details));
-        for (const id of details.tabIds) tabs.get(id).groupId = 8;
+        for (const id of details.tabIds) {
+          tabs.get(id).groupId = 8;
+          tabs.get(id).windowId = details.createProperties?.windowId ?? 4;
+        }
         return 8;
       }
     },
@@ -292,6 +308,7 @@ function runManager(initialItems, options = {}) {
       return elements.get(id);
     },
     createElement,
+    createTextNode: text => ({ textContent: text }),
     querySelector: () => null
   };
 
@@ -323,6 +340,7 @@ function runManager(initialItems, options = {}) {
   return {
     context,
     createdTabs,
+    createdWindows,
     errors,
     groupedTabs,
     updatedGroups,
@@ -951,7 +969,7 @@ test('reports cleanup failure and retains the restored stash', async () => {
   assert.match(result.getElement('notification-message').textContent, /kept to avoid data loss/i);
 });
 
-const preferenceKeys = ['openOnStartup', 'keepAfterRestore', 'skipDuplicates', 'editOnDoubleClick'];
+const preferenceKeys = ['openOnStartup', 'keepAfterRestore', 'restoreInNewWindow', 'skipDuplicates', 'editOnDoubleClick'];
 const settingsStash = {
   id: 'settings-stash', type: 'group', title: 'Settings test', color: 'blue',
   tabs: [{ title: 'One', url: 'https://one.example' }, { title: 'Two', url: 'https://two.example' }]
@@ -1697,7 +1715,7 @@ test('a new notification resets dismissal and normal messages expire after three
   assert.equal(result.getElement('notification').popoverOpen, false);
 });
 
-test('deletion notifications allow successive Undo actions and expire after thirty seconds', async () => {
+test('deletion notifications allow successive Undo actions and expire after five seconds', async () => {
   const first = { id: 'first', title: 'First', tabs: [] };
   const second = { id: 'second', title: 'Second', tabs: [] };
   const result = runManager([first, second]);
@@ -1707,7 +1725,7 @@ test('deletion notifications allow successive Undo actions and expire after thir
   await result.getElement('notification-undo').onclick();
   assert.deepEqual(result.getItems(), [second]);
   assert.equal(result.getElement('notification-undo').hidden, false);
-  await result.advanceTime(29999);
+  await result.advanceTime(4999);
   assert.equal(result.getElement('notification').popoverOpen, true);
   await result.advanceTime(1);
   assert.equal(result.getElement('notification').popoverOpen, false);
@@ -1770,14 +1788,14 @@ test('an Undo in progress blocks duplicate clicks and cannot expire during a slo
   while (!finish) await new Promise(resolve => setImmediate(resolve));
   await result.getElement('notification-undo').onclick();
   await vm.runInContext("showNotification('Another message')", result.context);
-  await result.advanceTime(31000);
+  await result.advanceTime(6000);
   assert.equal(result.getElement('notification').popoverOpen, true);
   assert.equal(result.getElement('notification-undo').disabled, true);
   finish();
   await pending;
   assert.deepEqual(result.getItems(), [stash]);
   assert.equal(result.getElement('notification-undo').hidden, false);
-  await result.advanceTime(30000);
+  await result.advanceTime(5000);
   assert.equal(result.getElement('notification').popoverOpen, false);
   await result.getElement('notification-undo').onclick();
   assert.deepEqual(result.getItems(), [stash]);
@@ -1887,6 +1905,129 @@ test('manifest defines one browser-managed action shortcut and no options page',
   assert.equal(manifest.options_ui, undefined);
   assert.deepEqual(Object.keys(manifest.commands), ['_execute_action']);
   assert.equal(manifest.commands._execute_action.suggested_key, 'Alt+S');
+});
+
+
+test('restores into one new window without a spare blank tab and retains failures', async () => {
+  const stash = { id: 'window', type: 'group', title: 'Work', color: 'blue', tabs: [
+    { title: 'One', url: 'https://one.example' }, { title: 'Two', url: 'https://two.example' }
+  ] };
+  const result = runManager([stash], { preferences: { restoreInNewWindow: true } });
+  await vm.runInContext(`restoreGroup(${JSON.stringify(stash)})`, result.context);
+  assert.equal(result.createdWindows.length, 1);
+  assert.deepEqual(result.createdWindows[0].url, stash.tabs.map(tab => tab.url));
+  assert.deepEqual(result.createdTabs, []);
+  assert.deepEqual(result.groupedTabs, [{ tabIds: [20, 21], createProperties: { windowId: 7 } }]);
+  assert.deepEqual([20, 21].map(id => result.getTab(id).windowId), [7, 7]);
+  assert.deepEqual(result.getItems(), []);
+  for (const options of [{ failWindowCreation: true }, { missingWindowTabs: true }]) {
+    const failed = runManager([stash], { ...options, preferences: { restoreInNewWindow: true } });
+    await vm.runInContext(`restoreGroup(${JSON.stringify(stash)})`, failed.context);
+    assert.deepEqual(failed.getItems(), [stash]);
+  }
+});
+
+
+
+test('restore button and title double-click both honor the new-window setting', async () => {
+  const stash = { id: 'window-controls', type: 'loose', tabs: [{ title: 'One', url: 'https://one.example' }] };
+  for (const control of ['button', 'title']) {
+    const result = runManager([stash], { preferences: { restoreInNewWindow: true } });
+    const header = createElement();
+    result.context.header = header;
+    await vm.runInContext('renderViewMode(header, ' + JSON.stringify(stash) + ')', result.context);
+    if (control === 'button') await header.children[4].children[0].onclick();
+    else await header.children[1].trigger('dblclick');
+    assert.equal(result.createdWindows.length, 1);
+    assert.equal(result.createdTabs.length, 0);
+  }
+});
+
+
+test('highlights literal queries without turning saved titles into markup', () => {
+  const result = runManager([]);
+  result.context.document.createElement = tag => Object.assign(createElement(), { tagName: tag });
+  result.getElement('searchInput').value = '[a]';
+  result.context.label = createElement();
+  vm.runInContext("highlightText(label, '<img src=x> [A] and [a]')", result.context);
+  assert.deepEqual(result.context.label.children.filter(part => part.tagName === 'mark').map(part => part.textContent), ['[A]', '[a]']);
+  assert.equal(result.context.label.children.map(part => part.textContent).join(''), '<img src=x> [A] and [a]');
+});
+
+
+test('search uses the loaded archive without mutating or rereading storage', async () => {
+  const stash = { id: 'found', title: 'Needle', tabs: [
+    { title: 'One', url: 'https://one.example' }, { title: 'Two', url: 'https://two.example' }
+  ] };
+  const result = runManager([stash, { id: 'other', title: 'Other', tabs: [] }]);
+  await vm.runInContext('loadStashes()', result.context);
+  let reads = 0;
+  const get = result.storage.local.get;
+  result.storage.local.get = query => { reads++; return get(query); };
+  result.getElement('searchInput').value = 'needle';
+  await result.getElement('searchInput').oninput();
+  assert.equal(reads, 0);
+  assert.equal(result.getElement('stash-container').children.length, 1);
+  assert.equal(result.storage.writes.length, 0);
+});
+
+
+test('a late archive read cannot overwrite a newer storage change', async () => {
+  const result = runManager([]);
+  await vm.runInContext('loadStashes()', result.context);
+  const pending = [];
+  result.storage.local.get = () => new Promise(resolve => pending.push(resolve));
+  const older = vm.runInContext('loadStashes()', result.context);
+  const newer = vm.runInContext('loadStashes()', result.context);
+  pending[1]({ stashedItems: [{ id: 'new', title: 'New', tabs: [] }] });
+  await newer;
+  pending[0]({ stashedItems: [{ id: 'old', title: 'Old', tabs: [] }] });
+  await older;
+  assert.equal(vm.runInContext('state.items[0].id', result.context), 'new');
+});
+
+test('cached typing does not cancel a pending storage refresh', async () => {
+  const result = runManager([{ id: 'old', title: 'Old', tabs: [] }]);
+  await vm.runInContext('loadStashes()', result.context);
+  let resolveRead;
+  result.storage.local.get = () => new Promise(resolve => { resolveRead = resolve; });
+  const refreshing = vm.runInContext('loadStashes()', result.context);
+  result.getElement('searchInput').value = 'new';
+  await result.getElement('searchInput').oninput();
+  resolveRead({ stashedItems: [{ id: 'new', title: 'New', tabs: [] }] });
+  await refreshing;
+  assert.equal(vm.runInContext('state.items[0].id', result.context), 'new');
+  assert.equal(result.getElement('stash-container').children[0].children[0].children[1].children.map(part => part.textContent).join(''), 'New');
+});
+
+test('collapse choices survive reopening and collapsed rows stay lazy', async () => {
+  const stash = { id: 'lazy', tabs: [{ title: 'One', url: 'https://one.example' }] };
+  const first = runManager([stash]);
+  await vm.runInContext('loadStashes()', first.context);
+  await first.getElement('collapseAllBtn').onclick();
+  const reopened = runManager([], { storage: first.storage });
+  await vm.runInContext('loadStashes()', reopened.context);
+  const card = () => reopened.getElement('stash-container').children[0];
+  assert.equal(card().children[1].children.length, 0);
+  await card().children[0].children[0].onclick();
+  assert.equal(card().children[1].children.length, 1);
+  assert.deepEqual(first.getItems(), [stash]);
+});
+
+test('collapse synchronizes automatically and a failed save leaves tabs visible', async () => {
+  const stash = { id: 'collapse', tabs: [{ title: 'One', url: 'https://one.example' }] };
+  const storage = createStorage({ stashedItems: [stash] });
+  const first = runManager([], { storage }), second = runManager([], { storage });
+  await Promise.all([vm.runInContext('loadStashes()', first.context), vm.runInContext('loadStashes()', second.context)]);
+  await first.getElement('collapseAllBtn').onclick();
+  assert.equal(second.getElement('stash-container').children[0].children[1].children.length, 0);
+  await second.getElement('collapseAllBtn').onclick();
+  assert.equal(first.getElement('stash-container').children[0].children[1].children.length, 1);
+  const failed = runManager([stash], { failStorageSetAt: 1 });
+  await vm.runInContext('loadStashes()', failed.context);
+  await failed.getElement('collapseAllBtn').onclick();
+  assert.equal(failed.getElement('stash-container').children[0].children[1].children.length, 1);
+  assert.match(failed.getElement('notification-message').textContent, /Could not save collapsed/);
 });
 
 

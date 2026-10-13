@@ -86,16 +86,25 @@ Restoring uses existing group permission and never requests it. Renaming or reco
 
 In the manager, search stash names, tab titles, and URLs, rename stashes, change their colors, or remove saved tabs and stashes. The **More actions** (⋮) button opens Help, Export, Import, Settings, and Delete all stashes; click outside or press Escape to close it. Import and export JSON backups to move your stashes between devices. Saved titles and URLs stay in Chrome local storage on this device, with no account or cloud sync.
 
-Deletion Undo stays available for **30 seconds** while the manager remains open. Undo restores only the removed tab when another manager has edited its stash; a conflicting reused stash ID is recovered under a new ID. Delete all remains confirmed and has no Undo.
+Search highlights literal matches in stash and page titles and reuses the loaded archive while you type. Hover a saved page title to see its full URL. Matching stashes still show all their tabs.
+
+The manager header stays visible while scrolling, keeping search and More actions within reach.
+
+**More actions → Collapse all stashes / Expand all stashes** gives a quick overview. Collapse choices persist after closing the manager and restarting the browser, synchronize between open managers, and do not change saved tabs. Collapsed stashes create their tab rows only when expanded.
+
+Enable **Restore stashes in a new window** in Settings to open all saved pages in one native window without a spare blank tab. The restore button and title double-click both follow this setting. Recreated browser groups stay in that window.
+
+Undo remains available for five seconds while the manager is open. It reinserts a deleted tab without replacing newer stash edits and gives a deleted stash a new internal ID if its old ID has been reused.
 
 ### Settings
 
-Open **More actions → Settings**. Changes save automatically on this device and synchronize between open manager tabs. All four switches default off:
+Open **More actions → Settings**. Changes save automatically on this device and synchronize between open manager tabs. All five switches default off:
 
 | Setting | Default behavior |
 | --- | --- |
 | Open Stasher on browser startup | Does not open automatically. |
 | Keep tabs after restoration | Removes the saved stash after successful restoration. |
+| Restore stashes in a new window | Restores into the current window. |
 | Skip duplicate tabs when stashing | Duplicate tabs are allowed. |
 | Double-click stash titles to edit | Double-click restores the stash. |
 

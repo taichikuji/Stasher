@@ -5,7 +5,7 @@
 const CONFIG = {
   STORAGE_KEY: 'stashedItems',
   CHROME_COLORS: ['grey', 'blue', 'red', 'yellow', 'green', 'pink', 'purple', 'cyan', 'orange'],
-  UNDO_TIMEOUT_MS: 30000,
+  UNDO_TIMEOUT_MS: 5000,
   NOTIFICATION_TIMEOUT_MS: 3000,
   MAX_TITLE_LENGTH: 200,
   MAX_IMPORT_BYTES: 1024 * 1024,
@@ -17,12 +17,16 @@ const CONFIG = {
 const PREFERENCE_DEFAULTS = {
   openOnStartup: false,
   keepAfterRestore: false,
+  restoreInNewWindow: false,
   skipDuplicates: false,
   editOnDoubleClick: false
 };
 
 // State Management
 const state = {
+  items: null,
+  collapsedIds: new Set(),
+  loadRevision: 0,
   undoStack: [],
   notificationTimeout: null,
   restoringIds: new Set(),
@@ -68,6 +72,9 @@ function safeColor(color) {
 // DOM Elements
 const elements = {
   container: document.getElementById('stash-container'),
+  collapseAllBtn: document.getElementById('collapseAllBtn'),
+  collapseAllIcon: document.getElementById('collapseAllIcon'),
+  collapseAllLabel: document.getElementById('collapseAllLabel'),
   notification: document.getElementById('notification'),
   notificationMessage: document.getElementById('notification-message'),
   undoBtn: document.getElementById('notification-undo'),
@@ -98,7 +105,7 @@ loadStashes();
 // Listen for local storage changes to update UI
 chrome.storage.onChanged.addListener((changes, namespace) => {
   if (namespace !== 'local') return;
-  if (changes[CONFIG.STORAGE_KEY]) loadStashes();
+  if (changes[CONFIG.STORAGE_KEY] || changes.collapsedStashIds) loadStashes();
   for (const [key, input] of Object.entries(preferenceInputs)) {
     if (!changes[key]) continue;
     state.preferencesRevision++;
@@ -112,11 +119,22 @@ chrome.storage.onChanged.addListener((changes, namespace) => {
 // Setup Event Listeners
 setupEventListeners();
 
-async function loadStashes() {
+async function loadStashes(items) {
+  const revision = items ? state.loadRevision : ++state.loadRevision;
   try {
     // Rebuild instead of patching individual cards so storage changes from any
     // extension context produce one consistent view.
-    const items = await getStashItems();
+    if (!items) {
+      const values = await chrome.storage.local.get({ [CONFIG.STORAGE_KEY]: [], collapsedStashIds: [] });
+      if (revision !== state.loadRevision) return;
+      items = Array.isArray(values[CONFIG.STORAGE_KEY]) ? values[CONFIG.STORAGE_KEY] : [];
+      state.collapsedIds = new Set(Array.isArray(values.collapsedStashIds) ? values.collapsedStashIds : []);
+    }
+    state.items = items;
+    elements.collapseAllBtn.disabled = items.length === 0;
+    const collapse = items.some(item => !state.collapsedIds.has(item.id));
+    elements.collapseAllIcon.setAttribute('href', collapse ? '#icon-collapse-all' : '#icon-expand-all');
+    elements.collapseAllLabel.textContent = collapse ? 'Collapse all stashes' : 'Expand all stashes';
     elements.container.innerHTML = '';
 
     if (items.length === 0) {
@@ -139,6 +157,7 @@ async function loadStashes() {
     elements.container.append(...visibleItems.map(createStashCard));
 
   } catch (error) {
+    if (revision !== state.loadRevision) return;
     console.error("Error loading stashes:", error);
     const p = document.createElement('p');
     p.className = 'error-state';
@@ -165,13 +184,26 @@ function rankStashesByQuery(items, query) {
   return ranked.flat();
 }
 
+// Create elements instead of inserting page titles or imported text as HTML.
+function highlightText(element, value) {
+  const text = String(value || '');
+  const query = elements.searchInput.value.trim();
+  element.textContent = text;
+  if (!query) return;
+  const escaped = query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const parts = text.split(new RegExp(`(${escaped})`, 'gi'));
+  element.replaceChildren(...parts.map((part, index) => index % 2
+    ? Object.assign(document.createElement('mark'), { textContent: part })
+    : document.createTextNode(part)));
+}
+
 /**
  * Creates the DOM element for a stash card.
  */
 function createStashCard(item) {
   const card = document.createElement('article');
   card.className = 'stash-card';
-  if (isCollapsed(item.id)) card.classList.add('collapsed');
+  if (state.collapsedIds.has(item.id)) card.classList.add('collapsed');
 
   const header = document.createElement('div');
   header.className = 'card-header';
@@ -183,27 +215,35 @@ function createStashCard(item) {
   const ul = document.createElement('ul');
   ul.className = 'link-list';
 
-  const tabs = Array.isArray(item.tabs) ? item.tabs : [];
-  tabs.forEach((tab, idx) => {
-    if (!isAllowedTabUrl(tab.url)) return;
-    const li = createTabListItem(tab, item.id, idx);
-    ul.appendChild(li);
-  });
+  if (!state.collapsedIds.has(item.id)) {
+    const tabs = Array.isArray(item.tabs) ? item.tabs : [];
+    tabs.forEach((tab, idx) => {
+      if (isAllowedTabUrl(tab.url)) ul.appendChild(createTabListItem(tab, item.id, idx));
+    });
+  }
 
   card.append(header, ul);
   return card;
 }
 
-// Collapse state is intentionally session-only; stashes always reopen after a browser restart.
-const COLLAPSED_KEY_PREFIX = 'stash-collapsed:';
-
-function isCollapsed(stashId) {
-  return sessionStorage.getItem(COLLAPSED_KEY_PREFIX + stashId) === '1';
-}
-
-function setCollapsed(stashId, collapsed) {
-  if (collapsed) sessionStorage.setItem(COLLAPSED_KEY_PREFIX + stashId, '1');
-  else sessionStorage.removeItem(COLLAPSED_KEY_PREFIX + stashId);
+async function setCollapsed(stashIds, collapsed) {
+  try {
+    await navigator.locks.request('stasher-storage', async () => {
+      const values = await chrome.storage.local.get({ [CONFIG.STORAGE_KEY]: [], collapsedStashIds: [] });
+      const ids = new Set(Array.isArray(values.collapsedStashIds) ? values.collapsedStashIds : []);
+      for (const id of stashIds) {
+        if (collapsed) ids.add(id);
+        else ids.delete(id);
+      }
+      // Discard collapse preferences for stashes that no longer exist.
+      const items = Array.isArray(values[CONFIG.STORAGE_KEY]) ? values[CONFIG.STORAGE_KEY] : [];
+      await chrome.storage.local.set({ collapsedStashIds: items.filter(item => ids.has(item.id)).map(item => item.id) });
+    });
+    await loadStashes();
+  } catch (error) {
+    console.error('Error saving collapsed stashes:', error);
+    showNotification('Could not save collapsed stashes. Please try again.');
+  }
 }
 
 /**
@@ -231,7 +271,8 @@ function createTabListItem(tab, stashId, tabIndex) {
 
   const a = document.createElement('a');
   a.href = url;
-  a.textContent = tab.title || url;
+  a.title = url;
+  highlightText(a, tab.title || url);
   a.target = '_blank';
   a.rel = 'noopener noreferrer';
 
@@ -265,7 +306,6 @@ async function removeTabFromStash(stashId, tabIndex) {
         kind: 'tab',
         stashSnapshot: structuredClone(items[index]),
         tabIndex,
-        tab: structuredClone(removedTab),
         label: removedTab.title || removedTab.url || 'Tab'
       };
 
@@ -306,23 +346,19 @@ function renderViewMode(container, item) {
   const collapseBtn = document.createElement('button');
   collapseBtn.type = 'button';
   collapseBtn.className = 'icon-btn collapse-btn';
-  const initiallyCollapsed = isCollapsed(item.id);
+  const initiallyCollapsed = state.collapsedIds.has(item.id);
   collapseBtn.innerHTML = iconMarkup('down');
   collapseBtn.setAttribute('aria-expanded', String(!initiallyCollapsed));
   collapseBtn.setAttribute('aria-label', initiallyCollapsed ? 'Expand stash' : 'Collapse stash');
-  collapseBtn.onclick = () => {
-    const card = container.closest('.stash-card');
-    if (!card) return;
-    const nowCollapsed = card.classList.toggle('collapsed');
-    setCollapsed(item.id, nowCollapsed);
-    collapseBtn.setAttribute('aria-expanded', String(!nowCollapsed));
-    collapseBtn.setAttribute('aria-label', nowCollapsed ? 'Expand stash' : 'Collapse stash');
+  collapseBtn.onclick = async () => {
+    await setCollapsed([item.id], !state.collapsedIds.has(item.id));
+    document.getElementById(`header-${item.id}`)?.firstElementChild?.focus();
   };
 
   // 1. Badge
   const badge = document.createElement('h2');
   badge.className = `group-badge color-${safeColor(item.color)}`;
-  badge.textContent = item.title || (item.type === 'group' ? 'Untitled Group' : 'Ungrouped Tabs');
+  highlightText(badge, item.title || (item.type === 'group' ? 'Untitled Group' : 'Ungrouped Tabs'));
   badge.style.cursor = 'pointer';
   badge.addEventListener('dblclick', async () => {
     try {
@@ -491,14 +527,25 @@ async function restoreGroup(item, preferences) {
       await chrome.permissions.contains({ permissions: ['tabGroups'] });
 
     // 1. Create tabs in order so a failed restore leaves no requests running.
-    for (const t of tabs) {
-      const tab = await chrome.tabs.create({ url: t.url, active: false });
-      tabIds.push(tab.id);
+    let windowId;
+    if (preferences.restoreInNewWindow) {
+      const window = await chrome.windows.create({ url: tabs.map(tab => tab.url), focused: true });
+      if (!Number.isInteger(window?.id) || window.tabs?.length !== tabs.length) throw new Error('Could not create restore window');
+      windowId = window.id;
+      tabIds.push(...window.tabs.map(tab => tab.id));
+    } else {
+      for (const t of tabs) {
+        const tab = await chrome.tabs.create({ url: t.url, active: false });
+        tabIds.push(tab.id);
+      }
     }
 
     if (canRestoreGroup) {
-      // 2. Create Group
-      const groupId = await chrome.tabs.group({ tabIds });
+      // Without an explicit destination, grouping moves the tabs back to this manager's window.
+      const groupId = await chrome.tabs.group({
+        tabIds,
+        ...(windowId !== undefined ? { createProperties: { windowId } } : {})
+      });
 
       // 3. Apply Properties
       await chrome.tabGroups.update(groupId, {
@@ -576,17 +623,13 @@ async function handleUndo() {
   try {
     await updateStashItems(items => {
       if (entry.kind === 'stash') {
-        const saved = entry.item;
-        const current = items.find(item => item.id === saved.id);
-        if (current && JSON.stringify(current) === JSON.stringify(saved)) return null;
-        return [current ? {
-          ...saved, id: crypto.randomUUID(), title: `${saved.title || 'Stash'} (recovered)`.slice(0, CONFIG.MAX_TITLE_LENGTH)
-        } : saved, ...items];
+        const item = items.some(i => i.id === entry.item.id) ? { ...entry.item, id: crypto.randomUUID() } : entry.item;
+        return [item, ...items];
       } else {
-        // Insert only the removed tab so Undo preserves edits made in another manager.
-        const existing = items.findIndex(i => i.id === entry.stashSnapshot.id);
-        if (existing !== -1) {
-          items[existing].tabs.splice(Math.min(entry.tabIndex, items[existing].tabs.length), 0, entry.tab);
+        // Restore only the removed tab, or the whole stash if its last tab was removed.
+        const existing = items.find(i => i.id === entry.stashSnapshot.id);
+        if (existing) {
+          existing.tabs.splice(entry.tabIndex, 0, entry.stashSnapshot.tabs[entry.tabIndex]);
           return items;
         }
         return [entry.stashSnapshot, ...items];
@@ -801,7 +844,10 @@ function setupEventListeners() {
     input.addEventListener('change', () => savePreference(key));
   }
   elements.importFile.onchange = () => handleImport();
-  elements.searchInput.oninput = loadStashes;
+  elements.searchInput.oninput = () => loadStashes(state.items);
+  elements.collapseAllBtn.onclick = () => setCollapsed(
+    state.items.map(item => item.id), state.items.some(item => !state.collapsedIds.has(item.id))
+  );
   document.addEventListener('keydown', event => {
     if (event.key === 'f' && (event.metaKey || event.ctrlKey)) {
       event.preventDefault();

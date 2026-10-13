@@ -234,6 +234,7 @@ function createElement(initialClasses = []) {
 function runManager(initialItems, options = {}) {
   const documentListeners = {};
   const createdTabs = [];
+  const createdWindows = [];
   const errors = [];
   const groupedTabs = [];
   const updatedGroups = [];
@@ -251,6 +252,17 @@ function runManager(initialItems, options = {}) {
       getURL: path => `chrome-extension://stasher/${path}`
     },
     storage,
+    windows: {
+      create: async details => {
+        if (options.failWindowCreation) throw new Error('Window creation failed');
+        const opened = (Array.isArray(details.url) ? details.url : [details.url]).map(url => ({ id: nextTabId++, url, windowId: 7 }));
+        opened.forEach(tab => tabs.set(tab.id, tab));
+        const window = { id: 7, tabs: opened, ...clone(details) };
+        createdWindows.push(window);
+        if (options.missingWindowTabs) delete window.tabs;
+        return clone(window);
+      }
+    },
     permissions: {
       contains: async () => options.groupPermissionGranted !== false
     },
@@ -267,7 +279,10 @@ function runManager(initialItems, options = {}) {
       group: async details => {
         if (options.failTabGrouping) throw new Error('Tab grouping failed');
         groupedTabs.push(clone(details));
-        for (const id of details.tabIds) tabs.get(id).groupId = 8;
+        for (const id of details.tabIds) {
+          tabs.get(id).groupId = 8;
+          tabs.get(id).windowId = details.createProperties?.windowId ?? 4;
+        }
         return 8;
       }
     },
@@ -323,6 +338,7 @@ function runManager(initialItems, options = {}) {
   return {
     context,
     createdTabs,
+    createdWindows,
     errors,
     groupedTabs,
     updatedGroups,
@@ -951,7 +967,7 @@ test('reports cleanup failure and retains the restored stash', async () => {
   assert.match(result.getElement('notification-message').textContent, /kept to avoid data loss/i);
 });
 
-const preferenceKeys = ['openOnStartup', 'keepAfterRestore', 'skipDuplicates', 'editOnDoubleClick'];
+const preferenceKeys = ['openOnStartup', 'keepAfterRestore', 'restoreInNewWindow', 'skipDuplicates', 'editOnDoubleClick'];
 const settingsStash = {
   id: 'settings-stash', type: 'group', title: 'Settings test', color: 'blue',
   tabs: [{ title: 'One', url: 'https://one.example' }, { title: 'Two', url: 'https://two.example' }]
@@ -1887,4 +1903,40 @@ test('manifest defines one browser-managed action shortcut and no options page',
   assert.equal(manifest.options_ui, undefined);
   assert.deepEqual(Object.keys(manifest.commands), ['_execute_action']);
   assert.equal(manifest.commands._execute_action.suggested_key, 'Alt+S');
+});
+
+
+test('restores into one new window without a spare blank tab and retains failures', async () => {
+  const stash = { id: 'window', type: 'group', title: 'Work', color: 'blue', tabs: [
+    { title: 'One', url: 'https://one.example' }, { title: 'Two', url: 'https://two.example' }
+  ] };
+  const result = runManager([stash], { preferences: { restoreInNewWindow: true } });
+  await vm.runInContext(`restoreGroup(${JSON.stringify(stash)})`, result.context);
+  assert.equal(result.createdWindows.length, 1);
+  assert.deepEqual(result.createdWindows[0].url, stash.tabs.map(tab => tab.url));
+  assert.deepEqual(result.createdTabs, []);
+  assert.deepEqual(result.groupedTabs, [{ tabIds: [20, 21], createProperties: { windowId: 7 } }]);
+  assert.deepEqual([20, 21].map(id => result.getTab(id).windowId), [7, 7]);
+  assert.deepEqual(result.getItems(), []);
+  for (const options of [{ failWindowCreation: true }, { missingWindowTabs: true }]) {
+    const failed = runManager([stash], { ...options, preferences: { restoreInNewWindow: true } });
+    await vm.runInContext(`restoreGroup(${JSON.stringify(stash)})`, failed.context);
+    assert.deepEqual(failed.getItems(), [stash]);
+  }
+});
+
+
+
+test('restore button and title double-click both honor the new-window setting', async () => {
+  const stash = { id: 'window-controls', type: 'loose', tabs: [{ title: 'One', url: 'https://one.example' }] };
+  for (const control of ['button', 'title']) {
+    const result = runManager([stash], { preferences: { restoreInNewWindow: true } });
+    const header = createElement();
+    result.context.header = header;
+    await vm.runInContext('renderViewMode(header, ' + JSON.stringify(stash) + ')', result.context);
+    if (control === 'button') await header.children[4].children[0].onclick();
+    else await header.children[1].trigger('dblclick');
+    assert.equal(result.createdWindows.length, 1);
+    assert.equal(result.createdTabs.length, 0);
+  }
 });

@@ -72,6 +72,8 @@ function safeColor(color) {
 const elements = {
   container: document.getElementById('stash-container'),
   collapseAllBtn: document.getElementById('collapseAllBtn'),
+  collapseAllIcon: document.getElementById('collapseAllIcon'),
+  collapseAllLabel: document.getElementById('collapseAllLabel'),
   notification: document.getElementById('notification'),
   notificationMessage: document.getElementById('notification-message'),
   undoBtn: document.getElementById('notification-undo'),
@@ -129,8 +131,9 @@ async function loadStashes(items) {
     }
     state.items = items;
     elements.collapseAllBtn.disabled = items.length === 0;
-    const action = items.some(item => !state.collapsedIds.has(item.id)) ? 'Collapse all stashes' : 'Expand all stashes';
-    elements.collapseAllBtn.innerHTML = iconMarkup('down') + action;
+    const collapse = items.some(item => !state.collapsedIds.has(item.id));
+    elements.collapseAllIcon.setAttribute('href', collapse ? '#icon-collapse-all' : '#icon-expand-all');
+    elements.collapseAllLabel.textContent = collapse ? 'Collapse all stashes' : 'Expand all stashes';
     elements.container.innerHTML = '';
 
     if (items.length === 0) {

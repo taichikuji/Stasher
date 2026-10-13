@@ -51,6 +51,12 @@
     <symbol id="icon-edit" viewBox="3 3 18 18">
       <path d="m18.38 8.45-9.42 9.41a2 2 0 0 1-1.02.55L5 19l.59-2.94a2 2 0 0 1 .55-1.02l9.41-9.42m2.83 2.83 1.41-1.41a1 1 0 0 0 0-1.42l-1.41-1.41a1 1 0 0 0-1.42 0l-1.41 1.41m2.83 2.83-2.83-2.83" />
     </symbol>
+    <symbol id="icon-collapse-all" viewBox="3 3 18 18">
+      <path d="m7 4 5 5 5-5M7 20l5-5 5 5" />
+    </symbol>
+    <symbol id="icon-expand-all" viewBox="3 3 18 18">
+      <path d="m7 9 5-5 5 5M7 15l5 5 5-5" />
+    </symbol>
     <symbol id="icon-down" viewBox="3 3 18 18">
       <path d="m19 9-6.29 6.29a1 1 0 0 1-1.42 0L5 9" />
     </symbol>
@@ -78,7 +84,7 @@
         <a class="actions-menu-item" href="https://github.com/taichikuji/Stasher/wiki/How-to-use-Stasher" target="_blank" rel="noopener noreferrer"><svg class="button-icon" aria-hidden="true"><use href="#icon-help"></use></svg>Help</a>
         <button id="exportBtn" class="actions-menu-item" type="button"><svg class="button-icon" aria-hidden="true"><use href="#icon-export"></use></svg>Export</button>
         <button id="importBtn" class="actions-menu-item" type="button"><svg class="button-icon" aria-hidden="true"><use href="#icon-import"></use></svg>Import</button>
-        <button id="collapseAllBtn" class="actions-menu-item" type="button" disabled><svg class="button-icon" aria-hidden="true"><use href="#icon-down"></use></svg>Collapse all stashes</button>
+        <button id="collapseAllBtn" class="actions-menu-item" type="button" disabled><svg class="button-icon" aria-hidden="true"><use id="collapseAllIcon" href="#icon-collapse-all"></use></svg><span id="collapseAllLabel">Collapse all stashes</span></button>
         <button id="settingsBtn" class="actions-menu-item" type="button"><svg class="button-icon" aria-hidden="true"><use href="#icon-settings"></use></svg>Settings</button>
         <button id="deleteAllBtn" class="actions-menu-item danger" type="button"><svg class="button-icon" aria-hidden="true"><use href="#icon-delete-stash"></use></svg>Delete all stashes</button>
       </div>

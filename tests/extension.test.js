@@ -183,6 +183,7 @@ function createElement(initialClasses = []) {
   const classes = new Set(initialClasses);
   const listeners = new Map();
   const element = {
+    value: '',
     children: [],
     append(...children) {
       this.children.push(...children);
@@ -292,6 +293,7 @@ function runManager(initialItems, options = {}) {
       return elements.get(id);
     },
     createElement,
+    createTextNode: text => ({ textContent: text }),
     querySelector: () => null
   };
 
@@ -1887,4 +1889,61 @@ test('manifest defines one browser-managed action shortcut and no options page',
   assert.equal(manifest.options_ui, undefined);
   assert.deepEqual(Object.keys(manifest.commands), ['_execute_action']);
   assert.equal(manifest.commands._execute_action.suggested_key, 'Alt+S');
+});
+
+
+test('highlights literal queries without turning saved titles into markup', () => {
+  const result = runManager([]);
+  result.context.document.createElement = tag => Object.assign(createElement(), { tagName: tag });
+  result.getElement('searchInput').value = '[a]';
+  result.context.label = createElement();
+  vm.runInContext("highlightText(label, '<img src=x> [A] and [a]')", result.context);
+  assert.deepEqual(result.context.label.children.filter(part => part.tagName === 'mark').map(part => part.textContent), ['[A]', '[a]']);
+  assert.equal(result.context.label.children.map(part => part.textContent).join(''), '<img src=x> [A] and [a]');
+});
+
+
+test('search uses the loaded archive without mutating or rereading storage', async () => {
+  const stash = { id: 'found', title: 'Needle', tabs: [
+    { title: 'One', url: 'https://one.example' }, { title: 'Two', url: 'https://two.example' }
+  ] };
+  const result = runManager([stash, { id: 'other', title: 'Other', tabs: [] }]);
+  await vm.runInContext('loadStashes()', result.context);
+  let reads = 0;
+  const get = result.storage.local.get;
+  result.storage.local.get = query => { reads++; return get(query); };
+  result.getElement('searchInput').value = 'needle';
+  await result.getElement('searchInput').oninput();
+  assert.equal(reads, 0);
+  assert.equal(result.getElement('stash-container').children.length, 1);
+  assert.equal(result.storage.writes.length, 0);
+});
+
+
+test('a late archive read cannot overwrite a newer storage change', async () => {
+  const result = runManager([]);
+  await vm.runInContext('loadStashes()', result.context);
+  const pending = [];
+  result.storage.local.get = () => new Promise(resolve => pending.push(resolve));
+  const older = vm.runInContext('loadStashes()', result.context);
+  const newer = vm.runInContext('loadStashes()', result.context);
+  pending[1]({ stashedItems: [{ id: 'new', title: 'New', tabs: [] }] });
+  await newer;
+  pending[0]({ stashedItems: [{ id: 'old', title: 'Old', tabs: [] }] });
+  await older;
+  assert.equal(vm.runInContext('state.items[0].id', result.context), 'new');
+});
+
+test('cached typing does not cancel a pending storage refresh', async () => {
+  const result = runManager([{ id: 'old', title: 'Old', tabs: [] }]);
+  await vm.runInContext('loadStashes()', result.context);
+  let resolveRead;
+  result.storage.local.get = () => new Promise(resolve => { resolveRead = resolve; });
+  const refreshing = vm.runInContext('loadStashes()', result.context);
+  result.getElement('searchInput').value = 'new';
+  await result.getElement('searchInput').oninput();
+  resolveRead({ stashedItems: [{ id: 'new', title: 'New', tabs: [] }] });
+  await refreshing;
+  assert.equal(vm.runInContext('state.items[0].id', result.context), 'new');
+  assert.equal(result.getElement('stash-container').children[0].children[0].children[1].children.map(part => part.textContent).join(''), 'New');
 });

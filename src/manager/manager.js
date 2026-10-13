@@ -25,7 +25,6 @@ const PREFERENCE_DEFAULTS = {
 const state = {
   undoStack: [],
   notificationTimeout: null,
-  restoringIds: new Set(),
   preferences: null,
   preferencesRevision: 0,
   savingPreferences: new Set()
@@ -321,6 +320,7 @@ function renderViewMode(container, item) {
   const badge = document.createElement('h2');
   badge.className = `group-badge color-${safeColor(item.color)}`;
   badge.textContent = item.title || (item.type === 'group' ? 'Untitled Group' : 'Ungrouped Tabs');
+  badge.title = badge.textContent;
   badge.style.cursor = 'pointer';
   badge.addEventListener('dblclick', async () => {
     try {
@@ -476,61 +476,66 @@ async function updateStashData(id, newTitle, newColor) {
 }
 
 async function restoreGroup(item, preferences) {
-  // Avoid creating duplicate tabs when the restore control is activated twice.
-  if (!item?.id || state.restoringIds.has(item.id)) return;
-  state.restoringIds.add(item.id);
-  const tabIds = [];
+  if (!item?.id) return;
+  // Shared across manager tabs and the side panel; do not queue a duplicate restore.
+  return navigator.locks.request(`stasher-restore:${item.id}`, { ifAvailable: true }, async lock => {
+    if (!lock) return;
+    const tabIds = [];
 
-  try {
-    preferences ??= await getPreferences();
-    const tabs = Array.isArray(item.tabs) ? item.tabs.filter(t => isAllowedTabUrl(t.url)) : [];
-    if (tabs.length === 0) return;
-    const canRestoreGroup = item.type === 'group' &&
-      await chrome.permissions.contains({ permissions: ['tabGroups'] });
+    try {
+      preferences ??= await getPreferences();
+      item = (await getStashItems()).find(stash => stash.id === item.id);
+      if (!item) return;
+      const tabs = Array.isArray(item.tabs) ? item.tabs.filter(t => isAllowedTabUrl(t.url)) : [];
+      if (tabs.length === 0) return;
+      const canRestoreGroup = item.type === 'group' &&
+        await chrome.permissions.contains({ permissions: ['tabGroups'] });
 
-    // 1. Create tabs in order so a failed restore leaves no requests running.
-    for (const t of tabs) {
-      const tab = await chrome.tabs.create({ url: t.url, active: false });
-      tabIds.push(tab.id);
+      // 1. Create tabs in order so a failed restore leaves no requests running.
+      for (const t of tabs) {
+        const tab = await chrome.tabs.create({ url: t.url, active: false });
+        tabIds.push(tab.id);
+      }
+
+      if (canRestoreGroup) {
+        // 2. Create Group
+        const groupId = await chrome.tabs.group({ tabIds });
+
+        // 3. Apply Properties
+        await chrome.tabGroups.update(groupId, {
+          title: typeof item.title === 'string' ? item.title : '',
+          color: safeColor(item.color),
+          collapsed: false
+        });
+      }
+
+      // 4. Cleanup Storage. Await this so a successful restore cannot silently
+      // leave a second, apparently unrestored copy behind.
+      if (!preferences.keepAfterRestore) {
+        const deleted = await deleteStash(item.id, { undo: false, expected: item });
+        if (!deleted) throw new Error('Restored stash was not found during cleanup');
+      }
+      showNotification('Restored your tabs.');
+
+    } catch (error) {
+      console.error("Error restoring group:", error);
+      showNotification(tabIds.length
+        ? 'Tabs were opened, but restoration could not finish. The saved stash was kept to avoid data loss.'
+        : 'Could not restore this stash. Your saved tabs were kept.');
     }
-
-    if (canRestoreGroup) {
-      // 2. Create Group
-      const groupId = await chrome.tabs.group({ tabIds });
-
-      // 3. Apply Properties
-      await chrome.tabGroups.update(groupId, {
-        title: typeof item.title === 'string' ? item.title : '',
-        color: safeColor(item.color),
-        collapsed: false
-      });
-    }
-
-    // 4. Cleanup Storage. Await this so a successful restore cannot silently
-    // leave a second, apparently unrestored copy behind.
-    if (!preferences.keepAfterRestore) {
-      const deleted = await deleteStash(item.id, { undo: false });
-      if (!deleted) throw new Error('Restored stash was not found during cleanup');
-    }
-    showNotification('Restored your tabs.');
-
-  } catch (error) {
-    console.error("Error restoring group:", error);
-    showNotification(tabIds.length
-      ? 'Tabs were opened, but restoration could not finish. The saved stash was kept to avoid data loss.'
-      : 'Could not restore this stash. Your saved tabs were kept.');
-  } finally {
-    state.restoringIds.delete(item.id);
-  }
+  });
 }
 
-async function deleteStash(id, { undo = true } = {}) {
+async function deleteStash(id, { undo = true, expected } = {}) {
   try {
     let deleted = false;
     let undoEntry;
     await updateStashItems(items => {
       const itemIndex = items.findIndex(i => i.id === id);
       if (itemIndex === -1) return null;
+      if (expected && JSON.stringify(items[itemIndex]) !== JSON.stringify(expected)) {
+        throw new Error('Stash changed during restoration; saved data was kept');
+      }
 
       if (undo) undoEntry = { kind: 'stash', item: items[itemIndex] };
 

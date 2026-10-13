@@ -658,18 +658,40 @@ textarea {
   }
 
   .card-header {
-    flex-wrap: wrap;
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr) auto auto;
     gap: 8px;
   }
 
+  .group-badge {
+    display: block;
+    max-width: 100%;
+    justify-self: start;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .edit-btn {
+    grid-column: 4;
+    grid-row: 2;
+    justify-self: end;
+  }
+
+  .card-actions {
+    grid-column: 3 / -1;
+    display: flex;
+  }
+
   .meta-info {
+    grid-column: 1 / 4;
+    grid-row: 2;
     margin-left: 0;
     margin-right: 0;
-    width: 100%;
-    order: 3;
   }
 
   .edit-container {
+    grid-column: 1 / -1;
     flex-wrap: wrap;
   }
 }

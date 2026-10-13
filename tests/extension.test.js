@@ -30,8 +30,10 @@ function eventSlot(listeners, name) {
 function createLocks() {
   const queues = new Map();
   return {
-    request(name, callback) {
-      const pending = (queues.get(name) ?? Promise.resolve()).then(() => callback());
+    request(name, options, callback) {
+      if (typeof options === 'function') { callback = options; options = {}; }
+      if (options.ifAvailable && queues.has(name)) return Promise.resolve(callback(null));
+      const pending = (queues.get(name) ?? Promise.resolve()).then(() => callback({ name }));
       const settled = pending.catch(() => {});
       queues.set(name, settled);
       settled.then(() => {
@@ -86,6 +88,7 @@ function runBackground(options = {}) {
   const updatedTabs = [];
   const removedTabs = [];
   const contextMenus = [];
+  const openedPanels = [];
   const errors = [];
   const storage = options.storage ?? createStorage({ stashedItems: options.items ?? [], ...options.preferences }, options);
   const sessionStorage = options.sessionStorage ?? createStorage({});
@@ -108,6 +111,15 @@ function runBackground(options = {}) {
     },
     action: {
       onClicked: eventSlot(listeners, 'actionClicked')
+    },
+    commands: {
+      onCommand: eventSlot(listeners, 'command')
+    },
+    sidePanel: {
+      open: async details => {
+        if (options.failSidePanel) throw new Error('Panel opening failed');
+        openedPanels.push(clone(details));
+      }
     },
     permissions: {
       request: async details => {
@@ -171,6 +183,7 @@ function runBackground(options = {}) {
     updatedTabs,
     removedTabs,
     contextMenus,
+    openedPanels,
     errors,
     permissionRequests,
     windows,
@@ -1881,10 +1894,78 @@ test('manifest defines a Chromium MV3 service worker', () => {
   assert.match(managerHtml, /<main id="stash-container" tabindex="-1" aria-live="polite">/);
 });
 
-test('manifest defines one browser-managed action shortcut and no options page', () => {
+test('manifest defines separate stash and side-panel shortcuts and no options page', () => {
   const manifest = JSON.parse(readFileSync(join(root, 'manifest.json'), 'utf8'));
 
   assert.equal(manifest.options_ui, undefined);
-  assert.deepEqual(Object.keys(manifest.commands), ['_execute_action']);
+  assert.deepEqual(Object.keys(manifest.commands), ['_execute_action', 'open-side-panel']);
+  assert.deepEqual(manifest.commands['open-side-panel'].suggested_key, { default: 'Alt+A', mac: 'Option+A' });
+  assert.equal(manifest.permissions.includes('sidePanel'), true);
+  assert.equal(manifest.side_panel.default_path, 'src/manager/manager.html');
   assert.equal(manifest.commands._execute_action.suggested_key, 'Alt+S');
+});
+
+
+test('side-panel shortcut opens the active window without stashing or requesting permissions', async () => {
+  const stash = { id: 'saved', tabs: [{ title: 'One', url: 'https://one.example' }] };
+  const result = runBackground({ items: [stash] });
+  await result.listeners.command('open-side-panel', { id: 12, windowId: 7 });
+  assert.deepEqual(result.openedPanels, [{ windowId: 7 }]);
+  assert.deepEqual(result.createdTabs, []);
+  assert.deepEqual(result.removedTabs, []);
+  assert.deepEqual(result.permissionRequests, []);
+  assert.deepEqual(result.storage.writes, []);
+  assert.deepEqual(result.getItems(), [stash]);
+  await result.listeners.command('_execute_action', { windowId: 7 });
+  await result.listeners.command('open-side-panel');
+  assert.equal(result.openedPanels.length, 1);
+});
+
+
+test('a side-panel shortcut failure preserves the archive and reports the error', async () => {
+  const stash = { id: 'saved', tabs: [] };
+  const result = runBackground({ items: [stash], failSidePanel: true });
+  await result.listeners.command('open-side-panel', { windowId: 7 });
+  assert.deepEqual(result.getItems(), [stash]);
+  assert.deepEqual(result.openedPanels, []);
+  assert.equal(result.errors.length, 1);
+});
+
+
+test('manager and side panel share a restore lock even for a kept stash', async () => {
+  const stash = { id: 'shared', tabs: [{ title: 'One', url: 'https://one.example' }] };
+  const storage = createStorage({ stashedItems: [stash], keepAfterRestore: true });
+  const first = runManager([stash], { storage });
+  const second = runManager([stash], { storage });
+  let release;
+  const create = first.context.chrome.tabs.create;
+  first.context.chrome.tabs.create = async details => {
+    await new Promise(resolve => { release = resolve; });
+    return create(details);
+  };
+  const restoring = vm.runInContext(`restoreGroup(${JSON.stringify(stash)})`, first.context);
+  while (!release) await new Promise(setImmediate);
+  await vm.runInContext(`restoreGroup(${JSON.stringify(stash)})`, second.context);
+  assert.equal(second.createdTabs.length, 0);
+  release();
+  await restoring;
+  assert.equal(first.createdTabs.length, 1);
+  assert.deepEqual(first.getItems(), [stash]);
+  await vm.runInContext(`restoreGroup(${JSON.stringify(stash)})`, second.context);
+  assert.equal(second.createdTabs.length, 1);
+});
+
+
+test('restoration cannot consume a stash changed by another manager while tabs open', async () => {
+  const stash = { id: 'edited', tabs: [{ title: 'One', url: 'https://one.example' }] };
+  const result = runManager([stash]);
+  const create = result.context.chrome.tabs.create;
+  result.context.chrome.tabs.create = async details => {
+    const tab = await create(details);
+    await result.storage.local.set({ stashedItems: [{ ...stash, keepAfterRestore: true }] });
+    return tab;
+  };
+  await vm.runInContext(`restoreGroup(${JSON.stringify(stash)})`, result.context);
+  assert.equal(result.getItems()[0].keepAfterRestore, true);
+  assert.match(result.getElement('notification-message').textContent, /saved stash was kept/);
 });

@@ -21,10 +21,11 @@
   },
   "commands": {
     "_execute_action": {
-      "suggested_key": "Alt+S"
+      "suggested_key": "Alt+S",
+      "description": "Activate Stasher"
     },
     "open-side-panel": {
-      "suggested_key": { "default": "Alt+A", "mac": "Option+A" },
+      "suggested_key": "Alt+A",
       "description": "Activate the side panel"
     }
   },

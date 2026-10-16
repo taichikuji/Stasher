@@ -25,7 +25,10 @@
       "description": "Activate Stasher"
     },
     "open-side-panel": {
-      "suggested_key": "Alt+A",
+      "suggested_key": {
+        "default": "Alt+A",
+        "mac": "Option+A"
+      },
       "description": "Activate the side panel"
     }
   },

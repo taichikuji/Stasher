@@ -785,24 +785,25 @@ async function handleImport(file = elements.importFile.files[0]) {
     if (isOneTab && valid.length !== importedData.length) {
       throw new Error(`OneTab export has unsupported URLs or a group exceeds ${CONFIG.MAX_TABS_PER_STASH} tabs. Nothing was imported.`);
     }
-    if (valid.length === 0) {
-      showNotification('No valid stash items found in file.');
-      return;
-    }
-
     let added = 0;
-    await updateStashItems(currentItems => {
-      const merged = [...valid, ...currentItems];
-
-      // Remove duplicates based on ID
-      const unique = merged.filter((v, i, a) => a.findIndex(t => (t.id === v.id)) === i);
-
-      added = unique.length - currentItems.length;
-      return unique;
+    if (valid.length) await updateStashItems(currentItems => {
+      const seen = new Set(currentItems.map(item => String(item.id)));
+      const additions = valid.filter(item => {
+        if (seen.has(item.id)) return false;
+        seen.add(item.id);
+        return true;
+      });
+      added = additions.length;
+      if (added) return [...additions, ...currentItems];
     });
 
-    showNotification(`Imported ${added} new stash${added !== 1 ? 'es' : ''}.`);
-    return true;
+    const invalid = importedData.length - valid.length;
+    const duplicates = valid.length - added;
+    const skipped = [];
+    if (invalid) skipped.push(`${invalid} invalid entr${invalid === 1 ? 'y' : 'ies'}`);
+    if (duplicates) skipped.push(`${duplicates} existing or duplicate ID${duplicates === 1 ? '' : 's'}`);
+    showNotification(`Imported ${added} new stash${added !== 1 ? 'es' : ''}.${skipped.length ? ` Skipped ${skipped.join(' and ')}.` : ''}`);
+    return valid.length > 0;
   } catch (err) {
     console.error("Import error:", err);
     showNotification(err instanceof SyntaxError ? 'Invalid JSON backup.' : `Import failed: ${err.message}`);

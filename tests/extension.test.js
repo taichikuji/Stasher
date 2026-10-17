@@ -409,7 +409,108 @@ test('stashes a tab group through the Chromium extension API', async () => {
   }]);
 });
 
-// ... (rest of file unchanged) ...
+const backupStash = {
+  id: 'backup', title: 'Saved pages', type: 'group', color: 'blue',
+  tabs: [{ title: 'Page', url: 'https://example.com' }]
+};
+const importJson = (manager, items) => manager.context.handleImport(new File([JSON.stringify(items)], 'backup.json'));
+
+test('JSON import reports invalid stashes and preserves valid ones', async () => {
+  const manager = runManager([]);
+  await importJson(manager, [backupStash, null, { ...backupStash, id: 'unsafe', tabs: [
+    ...backupStash.tabs, { title: 'Unsafe', url: 'javascript:alert(1)' }
+  ] }]);
+
+  assert.deepEqual(manager.getItems(), [backupStash]);
+  assert.equal(manager.getElement('notification-message').textContent, 'Imported 1 new stash. Skipped 2 invalid entries.');
+  assert.equal(manager.storage.writes.length, 1);
+});
+
+test('import keeps current stashes and the first valid occurrence of each normalized ID', async () => {
+  const existing = { ...backupStash, id: '7', title: 'Newer local data', tabs: [{ title: 'New', url: 'https://new.example' }] };
+  const manager = runManager([existing]);
+  const imported = [
+    { ...backupStash, id: 7 }, backupStash, { ...backupStash, title: 'Repeated old backup' }
+  ];
+
+  await importJson(manager, imported);
+  assert.deepEqual(manager.getItems(), [backupStash, existing]);
+  assert.equal(manager.getElement('notification-message').textContent, 'Imported 1 new stash. Skipped 2 existing or duplicate IDs.');
+  await importJson(manager, imported);
+  assert.deepEqual(manager.getItems(), [backupStash, existing]);
+  assert.equal(manager.getElement('notification-message').textContent, 'Imported 0 new stashes. Skipped 3 existing or duplicate IDs.');
+  assert.equal(manager.storage.writes.length, 1);
+});
+
+test('empty and invalid JSON imports leave storage untouched and report skipped entries', async () => {
+  const manager = runManager([backupStash]);
+  for (const [items, message] of [
+    [[], 'Imported 0 new stashes.'],
+    [[null, {}], 'Imported 0 new stashes. Skipped 2 invalid entries.'],
+    [[backupStash, null], 'Imported 0 new stashes. Skipped 1 invalid entry and 1 existing or duplicate ID.']
+  ]) {
+    await importJson(manager, items);
+    assert.equal(manager.getElement('notification-message').textContent, message);
+    assert.deepEqual(manager.getItems(), [backupStash]);
+    assert.equal(manager.storage.writes.length, 0);
+  }
+});
+
+test('failed import storage reads and writes preserve saved data and reset the import controls', async () => {
+  for (const [options, message] of [
+    [{ failStorageSetAt: 1 }, 'Import failed: Storage update failed'],
+    [{ failStorageGetKey: 'stashedItems' }, 'Import failed: Storage read failed']
+  ]) {
+    const manager = runManager([backupStash], options);
+    manager.getElement('importFile').value = 'backup.json';
+    assert.equal(await importJson(manager, [{ ...backupStash, id: 'new' }]), false);
+    assert.deepEqual(manager.getItems(), [backupStash]);
+    assert.equal(manager.getElement('notification-message').textContent, message);
+    assert.equal(manager.getElement('importBtn').disabled, false);
+    assert.equal(manager.getElement('importFile').value, '');
+  }
+});
+
+test('malformed and oversized imports retain validation limits without writing storage', async () => {
+  for (const [text, name, message] of [
+    ['{', 'backup.json', 'Invalid JSON backup.'],
+    ['{}', 'backup.json', 'Invalid format: expected an array.'],
+    [' '.repeat(1024 * 1024 + 1), 'backup.json', 'Import file is too large.'],
+    [JSON.stringify(Array(1001).fill(backupStash)), 'backup.json', 'Import contains too many stash items.'],
+    [JSON.stringify([{ ...backupStash, tabs: Array(501).fill(backupStash.tabs[0]) }]), 'backup.json',
+      'Imported 0 new stashes. Skipped 1 invalid entry.'],
+    [Array(501).fill('https://example.com | Page').join('\n'), 'onetab.txt',
+      'Import failed: OneTab export has unsupported URLs or a group exceeds 500 tabs. Nothing was imported.']
+  ]) {
+    const manager = runManager([backupStash]);
+    await manager.context.handleImport(new File([text], name));
+    assert.equal(manager.getElement('notification-message').textContent, message);
+    assert.deepEqual(manager.getItems(), [backupStash]);
+    assert.equal(manager.storage.writes.length, 0);
+    assert.notEqual(manager.getElement('importBtn').disabled, true);
+  }
+});
+
+test('valid OneTab import keeps groups and reports the added stash count', async () => {
+  const manager = runManager([backupStash]);
+  assert.equal(await manager.context.handleImport(new File([
+    'https://one.example | One\r\nhttps://two.example | Two\r\n\r\nhttps://three.example | Three'
+  ], 'onetab.txt')), true);
+  assert.deepEqual(manager.getItems().map(item => item.tabs.map(tab => tab.url)), [
+    ['https://one.example', 'https://two.example'], ['https://three.example'], ['https://example.com']
+  ]);
+  assert.equal(manager.getElement('notification-message').textContent, 'Imported 2 new stashes.');
+  assert.equal(manager.storage.writes.length, 1);
+});
+
+test('OneTab import remains all-or-nothing for unsupported URLs', async () => {
+  const manager = runManager([backupStash]);
+  const file = new File(['https://good.example | Good\n\njavascript:alert(1) | Unsafe'], 'onetab.txt');
+  assert.equal(await manager.context.handleImport(file), false);
+  assert.deepEqual(manager.getItems(), [backupStash]);
+  assert.equal(manager.storage.writes.length, 0);
+  assert.match(manager.getElement('notification-message').textContent, /Nothing was imported/);
+});
 
 test('manifest defines a Chromium MV3 service worker', () => {
   const manifest = JSON.parse(readFileSync(join(root, 'manifest.json'), 'utf8'));

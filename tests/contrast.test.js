@@ -43,14 +43,14 @@ test('manager color roles meet WCAG 2.2 contrast targets', () => {
   const surface0 = pair('surface0');
   const surface = [hexToRgb('ffffff'), surface0[1]];
   const text = pair('text');
-  const subtext = pair('subtext0');
+  const muted = pair('muted');
   const overlay = pair('overlay0');
   const blue = pair('blue');
 
   for (const mode of [0, 1]) {
     const name = mode === 0 ? 'light' : 'dark';
     expectContrast(`${name} text on surface`, text[mode], surface[mode], 4.5);
-    expectContrast(`${name} secondary text on base`, subtext[mode], base[mode], 4.5);
+    expectContrast(`${name} secondary text on base`, muted[mode], base[mode], 4.5);
     expectContrast(`${name} input boundary`, overlay[mode], base[mode], 3);
     expectContrast(`${name} focus indicator`, blue[mode], base[mode], 3);
   }

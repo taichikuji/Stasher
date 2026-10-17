@@ -96,7 +96,7 @@ const preferenceInputs = Object.fromEntries(Object.keys(PREFERENCE_DEFAULTS)
   .map(key => [key, document.getElementById(key)]));
 
 const iconMarkup = (name) =>
-  `<svg class="button-icon" aria-hidden="true"><use href="#icon-${name}"></use></svg>`;
+  `<svg class="ui-icon" aria-hidden="true"><use href="#icon-${name}"></use></svg>`;
 
 // Initial Load
 loadStashes();
@@ -278,7 +278,7 @@ function createTabListItem(tab, stashId, tabIndex) {
   const removeBtn = document.createElement('button');
   removeBtn.type = 'button';
   removeBtn.className = 'icon-btn remove-tab-btn';
-  removeBtn.innerHTML = iconMarkup('delete');
+  removeBtn.innerHTML = iconMarkup('close');
   removeBtn.setAttribute('aria-label', `Remove ${tab.title || url} from stash`);
   removeBtn.onclick = () => removeTabFromStash(stashId, tabIndex);
 
@@ -403,7 +403,7 @@ function renderViewMode(container, item) {
   const btnDelete = document.createElement('button');
   btnDelete.type = 'button';
   btnDelete.className = 'danger icon-only';
-  btnDelete.innerHTML = iconMarkup('delete-stash');
+  btnDelete.innerHTML = iconMarkup('delete');
   btnDelete.title = 'Delete Group';
   btnDelete.setAttribute('aria-label', `Delete ${item.title || 'stash'}`);
   btnDelete.onclick = () => deleteStash(item.id);
@@ -488,7 +488,7 @@ function renderEditMode(container, item) {
   const cancelBtn = document.createElement('button');
   cancelBtn.type = 'button';
   cancelBtn.className = 'icon-btn icon-only cancel-btn';
-  cancelBtn.innerHTML = iconMarkup('delete');
+  cancelBtn.innerHTML = iconMarkup('close');
   cancelBtn.setAttribute('aria-label', 'Cancel editing');
   // Re-fetch clean data to revert changes
   cancelBtn.onclick = handleCancel;

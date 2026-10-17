@@ -36,10 +36,9 @@ function createLocks() {
       const pending = (queues.get(name) ?? Promise.resolve()).then(() => callback({ name }));
       const settled = pending.catch(() => {});
       queues.set(name, settled);
-      settled.then(() => {
+      return pending.finally(() => {
         if (queues.get(name) === settled) queues.delete(name);
       });
-      return pending;
     }
   };
 }
@@ -185,8 +184,8 @@ function runBackground(options = {}) {
   };
 }
 
-function createElement(initialClasses = []) {
-  const classes = new Set(initialClasses);
+function createElement() {
+  const classes = new Set();
   const listeners = new Map();
   const element = {
     value: '',
@@ -512,6 +511,377 @@ test('OneTab import remains all-or-nothing for unsupported URLs', async () => {
   assert.match(manager.getElement('notification-message').textContent, /Nothing was imported/);
 });
 
+const savedStash = { ...backupStash, id: 'saved', tabs: [
+  { title: 'One', url: 'https://one.example' }, { title: 'Two', url: 'https://two.example' }
+] };
+const preferenceKeys = ['openOnStartup', 'keepAfterRestore', 'restoreInNewWindow', 'skipDuplicates', 'editOnDoubleClick'];
+const restore = manager => manager.context.restoreGroup(savedStash);
+
+// Hold one browser call so assertions observe the operation before it finishes.
+function pauseNextCall(target, method) {
+  const original = target[method];
+  const started = Promise.withResolvers();
+  const gate = Promise.withResolvers();
+  target[method] = async (...args) => {
+    target[method] = original;
+    started.resolve();
+    await gate.promise;
+    return original(...args);
+  };
+  return { started: started.promise, release: gate.resolve };
+}
+
+test('failed stash reads and writes keep every selected tab open and preserve saved data', async () => {
+  for (const failure of [{ failStorageGetKey: 'skipDuplicates' }, { failStorageGetKey: 'stashedItems' }, { failStorageSetAt: 1 }]) {
+    const background = runBackground({ ...failure, items: [savedStash], preferences: { skipDuplicates: true }, looseTabs: [
+      { id: 11, ...savedStash.tabs[0] }, { id: 12, title: 'New', url: 'https://new.example' }
+    ] });
+    await background.listeners.actionClicked({ windowId: 4, groupId: -1 });
+    assert.deepEqual(background.getItems(), [savedStash]);
+    assert.deepEqual(background.removedTabs, []);
+    assert.equal(background.createdTabs.length, 1);
+    assert.equal(background.errors.length, 1);
+  }
+});
+
+test('concurrent stashing contexts serialize updates and never close tabs before saving', async () => {
+  for (const skipDuplicates of [false, true]) {
+    const storage = createStorage({ stashedItems: [], skipDuplicates });
+    const first = runBackground({ storage });
+    const second = runBackground({ storage });
+    second.context.crypto.randomUUID = () => 'second-id';
+    const gate = pauseNextCall(storage.local, 'set');
+    const tab = { id: 11, ...savedStash.tabs[0], windowId: 4, groupId: -1 };
+    const pending = first.listeners.contextMenuClicked({ menuItemId: 'stash-tab' }, tab);
+    await gate.started;
+    const concurrent = second.listeners.contextMenuClicked({ menuItemId: 'stash-tab' }, { ...tab, id: 12 });
+    await new Promise(setImmediate);
+    assert.deepEqual(storage.snapshot().stashedItems, []);
+    assert.deepEqual(first.removedTabs, []);
+    assert.deepEqual(second.removedTabs, []);
+    gate.release();
+    await Promise.all([pending, concurrent]);
+    assert.equal(storage.writes.length, skipDuplicates ? 1 : 2);
+    assert.equal(first.getItems().length, skipDuplicates ? 1 : 2);
+    assert.deepEqual(first.removedTabs, [11]);
+    assert.deepEqual(second.removedTabs, [12]);
+  }
+});
+
+test('a failed stash write releases the lock for a concurrent successful save', async () => {
+  const storage = createStorage({ stashedItems: [], skipDuplicates: true }, { failStorageSetAt: 1 });
+  const first = runBackground({ storage });
+  const second = runBackground({ storage });
+  const tab = { id: 11, ...savedStash.tabs[0], windowId: 4, groupId: -1 };
+  await Promise.all([
+    first.listeners.contextMenuClicked({ menuItemId: 'stash-tab' }, tab),
+    second.listeners.contextMenuClicked({ menuItemId: 'stash-tab' }, { ...tab, id: 12 })
+  ]);
+  assert.equal(storage.writes.length, 2);
+  assert.deepEqual(first.removedTabs, []);
+  assert.deepEqual(second.removedTabs, [12]);
+  assert.deepEqual(second.getItems()[0].tabs, [savedStash.tabs[0]]);
+});
+
+test('restoration preserves tab order, grouping, destination, and the keep-after-restore setting', async () => {
+  for (const keepAfterRestore of [false, true]) for (const restoreInNewWindow of [false, true]) {
+    for (const groupPermissionGranted of [false, true]) {
+      const manager = runManager([savedStash, backupStash], {
+        preferences: { keepAfterRestore, restoreInNewWindow }, groupPermissionGranted
+      });
+      await restore(manager);
+      if (restoreInNewWindow) {
+        assert.deepEqual(manager.createdWindows.map(window => ({ url: window.url, focused: window.focused })), [
+          { url: savedStash.tabs.map(tab => tab.url), focused: true }
+        ]);
+        assert.deepEqual(manager.createdTabs, []);
+      } else {
+        assert.deepEqual(manager.createdTabs.map(({ id, ...tab }) => tab), savedStash.tabs.map(tab => ({ url: tab.url, active: false })));
+        assert.deepEqual(manager.createdWindows, []);
+      }
+      assert.deepEqual(manager.groupedTabs, groupPermissionGranted ? [{
+        tabIds: [20, 21], ...(restoreInNewWindow ? { createProperties: { windowId: 7 } } : {})
+      }] : []);
+      assert.deepEqual(manager.updatedGroups, groupPermissionGranted ? [[8, {
+        title: savedStash.title, color: savedStash.color, collapsed: false
+      }]] : []);
+      assert.deepEqual(manager.getItems(), keepAfterRestore ? [savedStash, backupStash] : [backupStash]);
+      assert.equal(manager.storage.writes.length, keepAfterRestore ? 0 : 1);
+      assert.equal(manager.getElement('notification-message').textContent, 'Restored your tabs.');
+      assert.equal(manager.getElement('notification-undo').hidden, true);
+      assert.deepEqual(manager.errors, []);
+    }
+  }
+});
+
+test('failed restore reads, browser operations, and cleanup retain the saved stash', async () => {
+  for (const options of [
+    { failPreferenceGet: true }, { failStorageGetKey: 'stashedItems' }, { failTabCreation: true },
+    { failTabGrouping: true }, { failGroupUpdate: true }, { failStorageSetAt: 1 },
+    { failWindowCreation: true, preferences: { restoreInNewWindow: true } },
+    { missingWindowTabs: true, preferences: { restoreInNewWindow: true } }
+  ]) {
+    const manager = runManager([savedStash], options);
+    await restore(manager);
+    assert.deepEqual(manager.getItems(), [savedStash]);
+    assert.match(manager.getElement('notification-message').textContent, /kept/);
+    assert.equal(manager.getElement('notification-undo').hidden, true);
+    assert.ok(manager.errors.length > 0);
+    if (options.failPreferenceGet || options.failStorageGetKey || options.failTabCreation) {
+      assert.deepEqual(manager.createdTabs, []);
+    }
+  }
+});
+
+test('restore reads current saved tabs, filters unsafe URLs, and ignores missing stashes', async () => {
+  const current = { ...savedStash, tabs: [{ title: 'Current', url: 'https://current.example' },
+    { title: 'Unsafe', url: 'javascript:alert(1)' }] };
+  const manager = runManager([current]);
+  await restore(manager);
+  assert.deepEqual(manager.createdTabs.map(tab => tab.url), ['https://current.example']);
+  assert.deepEqual(manager.getItems(), []);
+  await restore(manager);
+  assert.equal(manager.createdTabs.length, 1);
+});
+
+test('the restore guard spans contexts, pending creation, and partial failure, then permits retry', async () => {
+  const storage = createStorage({ stashedItems: [savedStash] });
+  const first = runManager([], { storage });
+  const second = runManager([], { storage });
+  const gate = pauseNextCall(first.context.chrome.tabs, 'create');
+  const pending = restore(first);
+  await gate.started;
+  await restore(second);
+  assert.deepEqual(second.createdTabs, []);
+  first.context.chrome.tabs.create = async () => { throw new Error('Second tab failed'); };
+  gate.release();
+  await pending;
+  assert.equal(first.createdTabs.length, 1);
+  assert.deepEqual(first.getItems(), [savedStash]);
+  assert.match(first.getElement('notification-message').textContent, /Tabs were opened.*kept/);
+  await restore(second);
+  assert.equal(second.createdTabs.length, 2);
+  assert.deepEqual(second.getItems(), []);
+});
+
+test('restore cleanup preserves edits made while tabs are opening', async () => {
+  const manager = runManager([savedStash]);
+  const gate = pauseNextCall(manager.context.chrome.tabs, 'create');
+  const pending = restore(manager);
+  await gate.started;
+  await manager.context.updateStashData(savedStash.id, 'Newer title', 'red');
+  gate.release();
+  await pending;
+  assert.deepEqual(manager.getItems(), [{ ...savedStash, title: 'Newer title', color: 'red' }]);
+  assert.match(manager.getElement('notification-message').textContent, /kept to avoid data loss/);
+});
+
+test('stash, individual-tab, and last-tab deletion can each be undone', async () => {
+  for (const [stash, action, remaining] of [
+    [savedStash, "deleteStash('saved')", []],
+    [savedStash, "removeTabFromStash('saved', 0)", [{ ...savedStash, tabs: [savedStash.tabs[1]] }]],
+    [{ ...savedStash, tabs: [savedStash.tabs[0]] }, "removeTabFromStash('saved', 0)", []]
+  ]) {
+    const manager = runManager([stash]);
+    await vm.runInContext(action, manager.context);
+    assert.deepEqual(manager.getItems(), remaining);
+    assert.equal(manager.getElement('notification-undo').hidden, false);
+    await manager.getElement('notification-undo').onclick();
+    assert.deepEqual(manager.getItems(), [stash]);
+    assert.equal(manager.getElement('notification').popoverOpen, false);
+  }
+});
+
+test('Undo preserves newer stash edits and tabs, and avoids replacing a reused stash ID', async () => {
+  const manager = runManager([savedStash]);
+  await manager.context.removeTabFromStash('saved', 0);
+  const newer = { ...savedStash, title: 'Newer title', color: 'red', tabs: [savedStash.tabs[1], backupStash.tabs[0]] };
+  await manager.storage.local.set({ stashedItems: [newer] });
+  await manager.context.handleUndo();
+  const combined = { ...newer, tabs: [savedStash.tabs[0], ...newer.tabs] };
+  assert.deepEqual(manager.getItems(), [combined]);
+  await manager.context.deleteStash('saved');
+  await manager.storage.local.set({ stashedItems: [newer] });
+  await manager.context.handleUndo();
+  assert.deepEqual(manager.getItems(), [{ ...combined, id: 'import-id-1' }, newer]);
+});
+
+test('failed stash and tab deletions preserve storage without offering a false Undo', async () => {
+  for (const action of ["deleteStash('saved')", "removeTabFromStash('saved', 0)"]) {
+    const manager = runManager([savedStash], { failStorageSetAt: 1 });
+    await vm.runInContext(action, manager.context);
+    assert.deepEqual(manager.getItems(), [savedStash]);
+    assert.equal(manager.getElement('notification-undo').hidden, true);
+    assert.match(manager.getElement('notification-message').textContent, /saved tabs were kept/);
+    await manager.context.handleUndo();
+    assert.deepEqual(manager.getItems(), [savedStash]);
+  }
+});
+
+test('failed Undo remains available for retry', async () => {
+  const manager = runManager([savedStash], { failStorageSetAt: 2 });
+  await manager.context.deleteStash('saved');
+  const undo = manager.getElement('notification-undo');
+  await undo.onclick();
+  assert.deepEqual(manager.getItems(), []);
+  assert.equal(undo.hidden, false);
+  assert.equal(undo.disabled, false);
+  assert.match(manager.getElement('notification-message').textContent, /Try Undo again/);
+  await undo.onclick();
+  assert.deepEqual(manager.getItems(), [savedStash]);
+});
+
+test('pending Undo blocks duplicate clicks and cannot expire during a slow save', async () => {
+  const manager = runManager([savedStash]);
+  await manager.context.deleteStash('saved');
+  const gate = pauseNextCall(manager.storage.local, 'set');
+  const undo = manager.getElement('notification-undo');
+  const pending = undo.onclick();
+  await gate.started;
+  await undo.onclick();
+  await manager.advanceTime(6000);
+  assert.equal(undo.disabled, true);
+  assert.equal(manager.getElement('notification').popoverOpen, true);
+  gate.release();
+  await pending;
+  assert.deepEqual(manager.getItems(), [savedStash]);
+  assert.equal(manager.storage.writes.length, 2);
+});
+
+test('Delete All only clears pending Undo after confirmed, successful deletion', async () => {
+  for (const [confirmation, failStorageSetAt] of [['cancel', undefined], ['confirm', undefined], ['confirm', 2]]) {
+    const manager = runManager([savedStash, backupStash], { failStorageSetAt });
+    await manager.context.deleteStash('saved');
+    const pending = manager.context.handleDeleteAll();
+    const dialog = manager.getElement('confirm-modal');
+    dialog.returnValue = confirmation;
+    await dialog.trigger('close');
+    await pending;
+    const deleted = confirmation === 'confirm' && !failStorageSetAt;
+    assert.deepEqual(manager.getItems(), deleted ? [] : [backupStash]);
+    assert.equal(manager.getElement('notification-undo').hidden, deleted);
+    await manager.context.handleUndo();
+    assert.deepEqual(manager.getItems(), deleted ? [] : [savedStash, backupStash]);
+  }
+});
+
+test('settings default off, save only the changed preference, and persist across managers', async () => {
+  for (const preferences of [{}, Object.fromEntries(preferenceKeys.map(key => [key, 'true']))]) {
+    const manager = runManager([savedStash], { preferences });
+    await manager.getElement('settingsBtn').onclick();
+    assert.deepEqual(manager.storage.writes, []);
+    for (const key of preferenceKeys) {
+      const input = manager.getElement(key);
+      assert.equal(input.checked, false);
+      assert.equal(input.disabled, false);
+      input.checked = true;
+      await input.trigger('change');
+      assert.deepEqual(manager.storage.writes.at(-1), { [key]: true });
+    }
+    const reopened = runManager([], { storage: manager.storage });
+    await reopened.getElement('settingsBtn').onclick();
+    for (const key of preferenceKeys) assert.equal(reopened.getElement(key).checked, true);
+    assert.deepEqual(reopened.getItems(), [savedStash]);
+  }
+});
+
+test('failed preference saves revert every switch and allow retry', async () => {
+  for (const key of preferenceKeys) {
+    const manager = runManager([savedStash], { preferences: { [key]: true }, failStorageSetAt: 1 });
+    await manager.getElement('settingsBtn').onclick();
+    const input = manager.getElement(key);
+    input.checked = false;
+    await input.trigger('change');
+    assert.equal(input.checked, true);
+    assert.equal(input.disabled, false);
+    assert.equal(manager.storage.snapshot()[key], true);
+    assert.equal(manager.getElement('settings-error').hidden, false);
+    input.checked = false;
+    await input.trigger('change');
+    assert.equal(manager.storage.snapshot()[key], false);
+    assert.equal(manager.getElement('settings-error').hidden, true);
+    assert.deepEqual(manager.getItems(), [savedStash]);
+  }
+});
+
+test('unreadable preferences disable all settings and block unsafe restoration', async () => {
+  for (const options of [{ failPreferenceGet: true }, { failStorageGetKey: 'restoreInNewWindow' }]) {
+    const manager = runManager([savedStash], options);
+    await manager.getElement('settingsBtn').onclick();
+    for (const key of preferenceKeys) {
+      const input = manager.getElement(key);
+      assert.equal(input.disabled, true);
+      input.checked = true;
+      await input.trigger('change');
+    }
+    await restore(manager);
+    assert.equal(manager.getElement('settings-error').hidden, false);
+    assert.deepEqual(manager.createdTabs, []);
+    assert.deepEqual(manager.createdWindows, []);
+    assert.deepEqual(manager.storage.writes, []);
+    assert.deepEqual(manager.getItems(), [savedStash]);
+  }
+});
+
+test('settings synchronize changes and removals between open managers', async () => {
+  const storage = createStorage({ stashedItems: [savedStash] });
+  const first = runManager([], { storage });
+  const second = runManager([], { storage });
+  await Promise.all([first.context.showSettings(), second.context.showSettings()]);
+  for (const key of preferenceKeys) {
+    first.getElement(key).checked = true;
+    await first.getElement(key).trigger('change');
+    assert.equal(second.getElement(key).checked, true);
+    await storage.local.remove(key);
+    assert.equal(second.getElement(key).checked, false);
+  }
+  assert.deepEqual(second.getItems(), [savedStash]);
+});
+
+test('settings discard stale reads after concurrent preference changes', async () => {
+  const manager = runManager([]);
+  const get = manager.storage.local.get;
+  const gate = Promise.withResolvers();
+  const started = Promise.withResolvers();
+  let reads = 0;
+  manager.storage.local.get = async query => {
+    const snapshot = await get(query);
+    if (++reads === 1) {
+      started.resolve();
+      await gate.promise;
+    }
+    return snapshot;
+  };
+  const loading = manager.context.showSettings();
+  await started.promise;
+  await manager.storage.local.set({ keepAfterRestore: true });
+  gate.resolve();
+  await loading;
+  assert.equal(reads, 2);
+  assert.equal(manager.getElement('keepAfterRestore').checked, true);
+});
+
+test('reopening settings preserves pending-save protection through success and failure', async () => {
+  for (const failStorageSetAt of [undefined, 1]) {
+    const manager = runManager([], { failStorageSetAt });
+    await manager.context.showSettings();
+    const gate = pauseNextCall(manager.storage.local, 'set');
+    const input = manager.getElement('keepAfterRestore');
+    input.checked = true;
+    const saving = input.trigger('change');
+    await gate.started;
+    await manager.context.showSettings();
+    assert.equal(input.disabled, true);
+    await input.trigger('change');
+    gate.release();
+    await saving;
+    assert.equal(input.checked, !failStorageSetAt);
+    assert.equal(input.disabled, false);
+    assert.equal(manager.storage.writes.length, 1);
+    assert.equal(manager.getElement('settings-error').hidden, !failStorageSetAt);
+  }
+});
+
 test('manifest defines a Chromium MV3 service worker', () => {
   const manifest = JSON.parse(readFileSync(join(root, 'manifest.json'), 'utf8'));
   const managerHtml = readFileSync(join(root, 'src/manager/manager.html'), 'utf8');
@@ -546,6 +916,3 @@ test('manifest defines native stash and side-panel shortcuts and no options page
   assert.equal(manifest.side_panel.default_path, 'src/manager/manager.html');
   assert.equal(manifest.commands._execute_action.suggested_key, 'Alt+S');
 });
-
-
-// Rest of tests omitted for brevity in this update — file unchanged beyond this point

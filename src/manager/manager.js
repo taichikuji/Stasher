@@ -68,6 +68,16 @@ function safeColor(color) {
   return CONFIG.CHROME_COLORS.includes(color) ? color : 'grey';
 }
 
+function getSplitPairs(tabs) {
+  const splitViews = new Map();
+  tabs.forEach((tab, index) => {
+    if (!isAllowedTabUrl(tab.url) || !Number.isSafeInteger(tab.splitViewId) || tab.splitViewId < 0) return;
+    if (!splitViews.has(tab.splitViewId)) splitViews.set(tab.splitViewId, []);
+    splitViews.get(tab.splitViewId).push(index);
+  });
+  return [...splitViews.values()].filter(indices => indices.length === 2 && indices[1] === indices[0] + 1);
+}
+
 // DOM Elements
 const elements = {
   container: document.getElementById('stash-container'),
@@ -216,9 +226,29 @@ function createStashCard(item) {
 
   if (!state.collapsedIds.has(item.id)) {
     const tabs = Array.isArray(item.tabs) ? item.tabs : [];
-    tabs.forEach((tab, idx) => {
-      if (isAllowedTabUrl(tab.url)) ul.appendChild(createTabListItem(tab, item.id, idx));
-    });
+    const splitStarts = new Set(getSplitPairs(tabs).map(pair => pair[0]));
+    for (let idx = 0; idx < tabs.length; idx++) {
+      if (!isAllowedTabUrl(tabs[idx].url)) continue;
+      const row = createTabListItem(tabs[idx], item.id, idx);
+      if (splitStarts.has(idx)) {
+        const split = document.createElement('li');
+        split.className = 'split-view-item';
+        const chain = document.createElement('span');
+        chain.className = 'split-view-chain';
+        chain.innerHTML = iconMarkup('chain');
+        chain.title = 'Split view: left pane above, right pane below';
+        chain.setAttribute('aria-hidden', 'true');
+        const pair = document.createElement('ul');
+        pair.className = 'split-view-tabs';
+        pair.setAttribute('aria-label', 'Split view: left pane first, right pane second');
+        pair.append(row, createTabListItem(tabs[idx + 1], item.id, idx + 1));
+        split.append(chain, pair);
+        ul.appendChild(split);
+        idx++;
+      } else {
+        ul.appendChild(row);
+      }
+    }
   }
 
   card.append(header, ul);
@@ -558,6 +588,14 @@ async function restoreStash(item, preferences) {
       });
     }
 
+    // Saved split IDs only link partners; Chrome assigns fresh IDs on restore.
+    const splitPairs = getSplitPairs(tabs).map(pair => pair.map(index => tabIds[index]));
+    if (splitPairs.length && typeof chrome.tabs.createSplit !== 'function') {
+      showNotification('Restored your tabs. This browser cannot recreate split views yet; your saved stash was kept.');
+      return;
+    }
+    for (const pair of splitPairs) await chrome.tabs.createSplit(pair);
+
     // 4. Cleanup Storage. Await this so a successful restore cannot silently
     // leave a second, apparently unrestored copy behind.
     if (!preferences.keepAfterRestore) {
@@ -713,6 +751,7 @@ function isValidStashItem(item) {
     tab && typeof tab === 'object' &&
     typeof tab.url === 'string' &&
     typeof tab.title === 'string' &&
+    (tab.splitViewId === undefined || (Number.isSafeInteger(tab.splitViewId) && tab.splitViewId >= 0)) &&
     isAllowedTabUrl(tab.url)
   );
 }

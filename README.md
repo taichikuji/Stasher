@@ -29,10 +29,10 @@ Right-click a tab and choose **Stash this tab**, or click the Stasher icon / pre
 ```mermaid
 flowchart TD
   accTitle: How Stasher saves tabs
-  accDescr: Stash one chosen tab, multiple selected tabs, the active tab's group, or loose tabs. Filter excluded tabs and optionally skip duplicate URLs, save new tabs locally, open the manager, and close eligible tabs including skipped duplicates. If none are eligible, only open the manager.
+  accDescr: Stash one chosen tab, explicitly selected tabs, the active tab's group, or loose tabs. A split view's automatically highlighted panes follow the group or loose-tabs behavior. Filter excluded tabs and optionally skip duplicate URLs, save new tabs locally, open the manager, and close eligible tabs including skipped duplicates. If none are eligible, only open the manager.
   Start(["Start stashing"]) --> Single{"Stash this tab?"}
   Single -->|Yes| Chosen["Choose that tab"]
-  Single -->|No| Selected{"Multiple tabs selected?"}
+  Single -->|No| Selected{"Explicit multi-tab selection?"}
   Selected -->|Yes| Selection["Choose selected tabs"]
   Selected -->|No| Group{"Active tab in a group?"}
   Group -->|Yes| GroupTabs["Choose that group's tabs"]
@@ -59,6 +59,8 @@ Enable **Skip duplicate tabs when stashing** to keep one saved copy of each exac
 
 Tab-group access is optional and is requested when you use the icon or shortcut. With access, Stasher saves the group name and color when the eligible tabs all belong to one group. A selection spanning groups or including loose tabs is saved as a loose stash. Right-clicking a single tab also saves it as a loose stash. If access is declined, tabs are still saved without group metadata; the next icon or shortcut use requests access again.
 
+Split view automatically highlights both panes. Clicking the icon or using **Alt+S** from a split view saves the whole active tab group, or all loose tabs if the split is ungrouped. Selecting additional tabs still saves only that selection. Stasher saves split pairings alongside the tabs, including in JSON backups. The manager shows each pair as two stacked tab rows joined by a chain symbol: the left pane is on top and the right pane is below. Removing one partner leaves the other as an ordinary saved tab.
+
 ### Restore tabs
 
 Click a saved tab's link to open it individually; the stash stays saved. To restore a whole stash, use its restore button or double-click its title. Settings can make a title double-click open the title/color editor instead.
@@ -83,6 +85,8 @@ flowchart TD
 ```
 
 Restoring uses existing group permission and never requests it. Renaming or recoloring a loose stash does not turn it into a group. If there are no eligible URLs, the stash stays saved. If restoration or stash removal fails, the stash is kept, though some tabs may already have opened. Restored tabs open unpinned and in the background and load normally; successful whole-stash restoration removes the stash without adding an Undo action unless **Keep tabs after restoration** is enabled.
+
+Whole-stash restoration recreates saved split pairs inside their restored group, including when restoring in a new window. This requires the browser's [split creation API](https://developer.chrome.com/docs/extensions/reference/api/tabs#method-createSplit) (Chrome 155+). If it is unavailable, the tabs still open and Stasher keeps the saved stash with a message explaining why. If one partner was removed or skipped as a duplicate, the remaining tab opens normally. Stashes saved before split support keep their existing behavior; their original split layout cannot be recovered.
 
 In the manager, search stash names, tab titles, and URLs, rename stashes, change their colors, or remove saved tabs and stashes. The **More actions** (⋮) button opens Help, Export, Import, Settings, and Delete all stashes; click outside or press Escape to close it. Import and export JSON backups to move your stashes between devices. Saved titles and URLs stay in Chrome local storage on this device, with no account or cloud sync.
 

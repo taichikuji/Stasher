@@ -382,6 +382,38 @@ button.danger:hover { background-color: color-mix(in srgb, var(--red) 12%, trans
 
 .link-item:last-child { border-bottom: none; }
 
+.split-view-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  border-bottom: 1px solid var(--surface1);
+}
+
+.split-view-item:last-child { border-bottom: none; }
+
+.split-view-chain {
+  flex: 0 0 20px;
+  color: var(--muted);
+}
+
+.split-view-chain .ui-icon {
+  display: block;
+  width: 20px;
+  height: 20px;
+  margin: 0;
+}
+
+.split-view-tabs {
+  flex: 1;
+  min-width: 0;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.split-view-tabs > .link-item { border-bottom: none; }
+.split-view-tabs .link-icon { display: none; }
+
 .link-icon {
   width: 20px;
   height: 20px;

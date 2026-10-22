@@ -244,6 +244,7 @@ function runManager(initialItems, options = {}) {
   const errors = [];
   const groupedTabs = [];
   const updatedGroups = [];
+  const splitTabs = [];
   const tabs = new Map();
   const storage = options.storage ?? createStorage({ stashedItems: initialItems, ...options.preferences }, options);
   let nextTabId = 20;
@@ -262,7 +263,7 @@ function runManager(initialItems, options = {}) {
       create: async details => {
         if (options.failWindowCreation) throw new Error('Window creation failed');
         const opened = (Array.isArray(details.url) ? details.url : [details.url]).map(url => ({ id: nextTabId++, url, windowId: 7 }));
-        opened.forEach(tab => tabs.set(tab.id, tab));
+        opened.forEach((tab, index) => tabs.set(tab.id, { ...tab, index, groupId: -1 }));
         const window = { id: 7, tabs: opened, ...clone(details) };
         createdWindows.push(window);
         if (options.missingWindowTabs) delete window.tabs;
@@ -277,7 +278,7 @@ function runManager(initialItems, options = {}) {
         if (options.failTabCreation) throw new Error('Tab creation failed');
         const tab = { id: nextTabId++, ...clone(details) };
         createdTabs.push(tab);
-        const current = { ...tab, groupId: -1, discarded: false, title: `Restored ${details.url}` };
+        const current = { ...tab, windowId: 4, index: tabs.size, groupId: -1, discarded: false, title: `Restored ${details.url}` };
         if (options.pendingNavigation) Object.assign(current, { url: 'about:blank', pendingUrl: details.url, title: '' });
         tabs.set(tab.id, current);
         return clone(current);
@@ -290,6 +291,18 @@ function runManager(initialItems, options = {}) {
           tabs.get(id).windowId = details.createProperties?.windowId ?? 4;
         }
         return 8;
+      },
+      createSplit: async tabIds => {
+        if (options.failSplitCreation) throw new Error('Split creation failed');
+        assert.equal(tabIds.length, 2);
+        const [left, right] = tabIds.map(id => tabs.get(id));
+        assert.equal(right.index, left.index + 1);
+        assert.equal(left.windowId, right.windowId);
+        assert.equal(left.groupId, right.groupId);
+        const splitViewId = 100 + splitTabs.length;
+        splitTabs.push(clone(tabIds));
+        for (const id of tabIds) tabs.get(id).splitViewId = splitViewId;
+        return splitViewId;
       }
     },
     tabGroups: {
@@ -299,6 +312,7 @@ function runManager(initialItems, options = {}) {
       }
     }
   };
+  if (options.splitViewSupported === false) delete api.tabs.createSplit;
 
   const document = {
     addEventListener(name, listener) {
@@ -349,6 +363,7 @@ function runManager(initialItems, options = {}) {
     errors,
     groupedTabs,
     updatedGroups,
+    splitTabs,
     getTab: id => clone(tabs.get(id)),
     storage,
     async advanceTime(milliseconds) {
@@ -516,6 +531,180 @@ const savedStash = { ...backupStash, id: 'saved', tabs: [
 ] };
 const preferenceKeys = ['openOnStartup', 'keepAfterRestore', 'restoreInNewWindow', 'skipDuplicates', 'editOnDoubleClick'];
 const restore = manager => manager.context.restoreGroup(savedStash);
+
+const splitBrowserTabs = [
+  ...savedStash.tabs, { title: 'Three', url: 'https://three.example' }, { title: 'Four', url: 'https://four.example' }
+].map((tab, index) => ({ ...tab, id: 11 + index, windowId: 4, groupId: 7, splitViewId: index < 2 ? 0 : -1 }));
+const splitStash = { ...savedStash, tabs: splitBrowserTabs.map(({ title, url, splitViewId }) => ({
+  title, url, ...(splitViewId >= 0 ? { splitViewId } : {})
+})) };
+
+test('chained split entries keep the left pane first and retain individual deletion and Undo', async () => {
+  const manager = runManager([splitStash]);
+  await manager.context.loadStashes();
+  const rows = () => manager.getElement('stash-container').children[0].children[1].children;
+  assert.deepEqual(rows().map(row => row.className), ['split-view-item', 'link-item', 'link-item']);
+  assert.equal(rows()[0].children[0].className, 'split-view-chain');
+  assert.equal(rows()[0].children[0].title, 'Split view: left pane above, right pane below');
+  const pair = rows()[0].children[1].children;
+  assert.deepEqual(pair.map(row => row.children[1].href), splitStash.tabs.slice(0, 2).map(tab => tab.url));
+  assert.deepEqual(rows().slice(1).map(row => row.children[1].href), splitStash.tabs.slice(2).map(tab => tab.url));
+  await pair[1].children[2].onclick();
+  await manager.context.loadStashes();
+  assert.deepEqual(manager.getItems()[0].tabs, [splitStash.tabs[0], ...splitStash.tabs.slice(2)]);
+  assert.ok(rows().every(row => row.className === 'link-item'));
+  await manager.getElement('notification-undo').onclick();
+  await manager.context.loadStashes();
+  assert.equal(rows()[0].className, 'split-view-item');
+  assert.deepEqual(manager.getItems(), [splitStash]);
+  assert.deepEqual(manager.errors, []);
+});
+
+test('split indicators require exactly two adjacent eligible partners and distinguish multiple pairs', async () => {
+  const manager = runManager([]);
+  for (const [tabs, expected] of [
+    [splitStash.tabs, [[0, 1]]],
+    [splitStash.tabs.map((tab, index) => ({ ...tab, splitViewId: index < 2 ? 0 : 1 })), [[0, 1], [2, 3]]],
+    [splitStash.tabs.slice(1), []],
+    [[splitStash.tabs[0], splitStash.tabs[2], splitStash.tabs[1]], []],
+    [[{ ...splitStash.tabs[0], url: 'javascript:alert(1)' }, splitStash.tabs[1]], []],
+    [splitStash.tabs.map(tab => ({ ...tab, splitViewId: 0 })), []],
+    [splitStash.tabs.map(tab => ({ ...tab, splitViewId: '0' })), []],
+    [savedStash.tabs, []]
+  ]) {
+    assert.deepEqual(clone(manager.context.getSplitPairs(tabs)), expected);
+    const card = manager.context.createStashCard({ ...splitStash, tabs });
+    assert.equal(card.children[1].children.filter(row => row.className === 'split-view-item').length, expected.length);
+  }
+});
+
+test('a split pair highlighted by the browser stashes the whole active group from either pane', async () => {
+  for (const active of splitBrowserTabs.slice(0, 2)) for (const groupPermissionGranted of [false, true]) {
+    const background = runBackground({
+      groupPermissionGranted, permissionRequestGranted: groupPermissionGranted,
+      groupedTabs: splitBrowserTabs, highlightedTabs: splitBrowserTabs.slice(0, 2)
+    });
+    await background.listeners.actionClicked(active);
+    const [stash] = background.getItems();
+    assert.deepEqual(stash.tabs, splitStash.tabs);
+    assert.equal(stash.type, groupPermissionGranted ? 'group' : 'loose');
+    assert.equal(stash.title, groupPermissionGranted ? 'Work' : undefined);
+    assert.equal(stash.color, groupPermissionGranted ? 'blue' : undefined);
+    assert.deepEqual(background.removedTabs, [11, 12, 13, 14]);
+    assert.deepEqual(background.errors, []);
+  }
+});
+
+test('an ungrouped split pair follows the usual loose-tabs stash behavior', async () => {
+  const looseTabs = splitBrowserTabs.map(tab => ({ ...tab, groupId: -1 }));
+  const background = runBackground({ looseTabs, highlightedTabs: looseTabs.slice(0, 2) });
+  await background.listeners.actionClicked(looseTabs[0]);
+  assert.deepEqual(background.getItems()[0].tabs, splitStash.tabs);
+  assert.equal(background.getItems()[0].type, 'loose');
+  assert.deepEqual(background.removedTabs, [11, 12, 13, 14]);
+});
+
+test('explicit selections still take precedence over whole groups, including extra tabs beside a split pair', async () => {
+  for (const highlightedTabs of [
+    splitBrowserTabs.slice(0, 3),
+    splitBrowserTabs.slice(0, 2).map(({ splitViewId, ...tab }) => tab),
+    [...splitBrowserTabs.slice(0, 2), { ...splitBrowserTabs[2], groupId: -1 }]
+  ]) {
+    const background = runBackground({ groupedTabs: splitBrowserTabs, highlightedTabs });
+    await background.listeners.actionClicked(highlightedTabs[0]);
+    const [stash] = background.getItems();
+    assert.deepEqual(stash.tabs.map(tab => tab.url), highlightedTabs.map(tab => tab.url));
+    assert.equal(stash.type, highlightedTabs.some(tab => tab.groupId === -1) ? 'loose' : 'group');
+    assert.deepEqual(background.removedTabs, highlightedTabs.map(tab => tab.id));
+    assert.deepEqual(background.errors, []);
+  }
+});
+
+test('right-clicking one split pane stashes only that tab', async () => {
+  const background = runBackground({ groupedTabs: splitBrowserTabs, highlightedTabs: splitBrowserTabs.slice(0, 2) });
+  await background.listeners.contextMenuClicked({ menuItemId: 'stash-tab' }, splitBrowserTabs[0]);
+  assert.deepEqual(background.getItems()[0].tabs.map(tab => tab.url), [splitBrowserTabs[0].url]);
+  assert.equal(background.getItems()[0].type, 'loose');
+  assert.deepEqual(background.removedTabs, [11]);
+});
+
+test('split pairs survive duplicate filtering and JSON backup import', async () => {
+  for (const duplicateIndex of [0, 3]) {
+    const background = runBackground({
+      groupedTabs: splitBrowserTabs, highlightedTabs: splitBrowserTabs.slice(0, 2),
+      preferences: { skipDuplicates: true }, items: [{ ...backupStash, tabs: [splitStash.tabs[duplicateIndex]] }]
+    });
+    await background.listeners.actionClicked(splitBrowserTabs[0]);
+    const expected = splitStash.tabs.filter((tab, index) => index !== duplicateIndex);
+    assert.deepEqual(background.getItems()[0].tabs, expected);
+    assert.deepEqual(background.removedTabs, [11, 12, 13, 14]);
+    const manager = runManager([]);
+    await importJson(manager, background.getItems());
+    assert.deepEqual(manager.getItems()[0].tabs, expected);
+    await manager.context.restoreGroup(manager.getItems()[0]);
+    assert.deepEqual(manager.splitTabs, duplicateIndex === 0 ? [] : [[20, 21]]);
+    assert.deepEqual(manager.errors, []);
+  }
+});
+
+test('JSON imports reject invalid split identifiers without changing existing stashes', async () => {
+  for (const splitViewId of [-1, 0.5, '0', null, {}, Number.MAX_SAFE_INTEGER + 1]) {
+    const manager = runManager([backupStash]);
+    await importJson(manager, [{ ...splitStash, tabs: [{ ...splitStash.tabs[0], splitViewId }] }]);
+    assert.deepEqual(manager.getItems(), [backupStash]);
+    assert.match(manager.getElement('notification-message').textContent, /Skipped 1 invalid entry/);
+  }
+});
+
+test('restore recreates split pairs with the saved group, destination, order, and retention setting', async () => {
+  for (const type of ['group', 'loose']) for (const restoreInNewWindow of [false, true]) {
+    for (const keepAfterRestore of [false, true]) for (const groupPermissionGranted of [false, true]) {
+      const stash = { ...splitStash, type };
+      const manager = runManager([stash], { preferences: { restoreInNewWindow, keepAfterRestore }, groupPermissionGranted });
+      await manager.context.restoreGroup(stash);
+      assert.deepEqual(manager.splitTabs, [[20, 21]]);
+      assert.equal(manager.getTab(20).splitViewId, manager.getTab(21).splitViewId);
+      assert.equal(manager.getTab(22).splitViewId, undefined);
+      assert.equal(manager.getTab(20).windowId, restoreInNewWindow ? 7 : 4);
+      assert.equal(manager.getTab(20).groupId, type === 'group' && groupPermissionGranted ? 8 : -1);
+      assert.deepEqual([20, 21, 22, 23].map(id => manager.getTab(id).url), stash.tabs.map(tab => tab.url));
+      assert.deepEqual(manager.getItems(), keepAfterRestore ? [stash] : []);
+      assert.deepEqual(manager.errors, []);
+    }
+  }
+});
+
+test('restore pairs each saved split separately and ignores missing or invalid partners', async () => {
+  for (const [tabs, expectedPairs] of [
+    [splitStash.tabs.map((tab, index) => ({ ...tab, splitViewId: index < 2 ? 0 : 1 })), [[20, 21], [22, 23]]],
+    [splitStash.tabs.slice(1), []],
+    [[{ title: 'Unsafe', url: 'javascript:alert(1)', splitViewId: 0 }, ...splitStash.tabs.slice(1)], []],
+    [splitStash.tabs.map(tab => ({ ...tab, splitViewId: '0' })), []],
+    [splitStash.tabs.map(tab => ({ ...tab, splitViewId: 0 })), []]
+  ]) {
+    const stash = { ...splitStash, tabs };
+    const manager = runManager([stash]);
+    await manager.context.restoreGroup(stash);
+    assert.deepEqual(manager.splitTabs, expectedPairs);
+    assert.deepEqual(manager.getItems(), []);
+    assert.deepEqual(manager.errors, []);
+  }
+});
+
+test('unavailable split APIs and split creation failures preserve the stash and explain the result', async () => {
+  for (const options of [{ splitViewSupported: false }, { failSplitCreation: true }]) {
+    const manager = runManager([splitStash], options);
+    await manager.context.restoreGroup(splitStash);
+    assert.deepEqual(manager.getItems(), [splitStash]);
+    assert.equal(manager.createdTabs.length, 4);
+    assert.match(manager.getElement('notification-message').textContent, /stash was kept/);
+    assert.deepEqual(manager.splitTabs, []);
+  }
+  const legacy = runManager([savedStash], { splitViewSupported: false });
+  await restore(legacy);
+  assert.deepEqual(legacy.getItems(), []);
+  assert.deepEqual(legacy.errors, []);
+});
 
 // Hold one browser call so assertions observe the operation before it finishes.
 function pauseNextCall(target, method) {

@@ -150,17 +150,18 @@ const handleStash = async (tab, singleTab = false) => {
       permissions: ['tabGroups']
     }).catch(() => false);
 
-    // Chromium allows users to highlight multiple tabs in the tab strip. When
-    // they do, that explicit selection takes precedence over the usual
-    // group-or-loose-tabs behavior.
     const highlightedTabs = singleTab ? [] : await chrome.tabs.query({
       windowId: currentWindowId,
       highlighted: true
     });
+    // Split view highlights both panes automatically; only extra selected tabs
+    // should override the usual group-or-loose-tabs behavior.
+    const splitPairHighlighted = Number.isSafeInteger(tab.splitViewId) && tab.splitViewId >= 0 &&
+      highlightedTabs.every(t => t.splitViewId === tab.splitViewId);
 
     if (singleTab) {
       tabsToStash = filterStashableTabs([tab], true);
-    } else if (highlightedTabs.length > 1) {
+    } else if (highlightedTabs.length > 1 && !splitPairHighlighted) {
       tabsToStash = filterStashableTabs(highlightedTabs);
 
       const selectedGroupIds = new Set(tabsToStash.map(t => t.groupId));
@@ -198,7 +199,8 @@ const handleStash = async (tab, singleTab = false) => {
         type: tabGroup ? 'group' : 'loose',
         tabs: tabsToStash.map(t => ({
           title: t.title || t.url,
-          url: t.url
+          url: t.url,
+          ...(Number.isSafeInteger(t.splitViewId) && t.splitViewId >= 0 ? { splitViewId: t.splitViewId } : {})
         }))
       };
       if (tabGroup) {

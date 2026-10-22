@@ -539,14 +539,13 @@ const splitStash = { ...savedStash, tabs: splitBrowserTabs.map(({ title, url, sp
   title, url, ...(splitViewId >= 0 ? { splitViewId } : {})
 })) };
 
-test('chained split entries keep the left pane first and retain individual deletion and Undo', async () => {
+test('split entries preserve favicons, pane order, individual deletion, and Undo', async () => {
   const manager = runManager([splitStash]);
   await manager.context.loadStashes();
   const rows = () => manager.getElement('stash-container').children[0].children[1].children;
   assert.deepEqual(rows().map(row => row.className), ['split-view-item', 'link-item', 'link-item']);
-  assert.equal(rows()[0].children[0].className, 'split-view-chain');
-  assert.equal(rows()[0].children[0].title, 'Split view: left pane above, right pane below');
-  const pair = rows()[0].children[1].children;
+  const pair = rows()[0].children[0].children;
+  assert.ok(pair.every(row => row.children[0].children[0].className === 'link-favicon'));
   assert.deepEqual(pair.map(row => row.children[1].href), splitStash.tabs.slice(0, 2).map(tab => tab.url));
   assert.deepEqual(rows().slice(1).map(row => row.children[1].href), splitStash.tabs.slice(2).map(tab => tab.url));
   await pair[1].children[2].onclick();

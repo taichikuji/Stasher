@@ -233,16 +233,12 @@ function createStashCard(item) {
       if (splitStarts.has(idx)) {
         const split = document.createElement('li');
         split.className = 'split-view-item';
-        const chain = document.createElement('span');
-        chain.className = 'split-view-chain';
-        chain.innerHTML = iconMarkup('chain');
-        chain.title = 'Split view: left pane above, right pane below';
-        chain.setAttribute('aria-hidden', 'true');
+        split.title = 'Split view: these tabs restore together';
         const pair = document.createElement('ul');
         pair.className = 'split-view-tabs';
         pair.setAttribute('aria-label', 'Split view: left pane first, right pane second');
         pair.append(row, createTabListItem(tabs[idx + 1], item.id, idx + 1));
-        split.append(chain, pair);
+        split.appendChild(pair);
         ul.appendChild(split);
         idx++;
       } else {

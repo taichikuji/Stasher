@@ -59,7 +59,7 @@ Enable **Skip duplicate tabs when stashing** to keep one saved copy of each exac
 
 Tab-group access is optional and is requested when you use the icon or shortcut. With access, Stasher saves the group name and color when the eligible tabs all belong to one group. A selection spanning groups or including loose tabs is saved as a loose stash. Right-clicking a single tab also saves it as a loose stash. If access is declined, tabs are still saved without group metadata; the next icon or shortcut use requests access again.
 
-Split view automatically highlights both panes. Clicking the icon or using **Alt+S** from a split view saves the whole active tab group, or all loose tabs if the split is ungrouped. Selecting additional tabs still saves only that selection. Stasher saves split pairings alongside the tabs, including in JSON backups. The manager shows each pair as two stacked tab rows joined by a chain symbol: the left pane is on top and the right pane is below. Removing one partner leaves the other as an ordinary saved tab.
+Split view automatically highlights both panes. Clicking the icon or using **Alt+S** from a split view saves the whole active tab group, or all loose tabs if the split is ungrouped. Selecting additional tabs still saves only that selection. Stasher saves split pairings alongside the tabs, including in JSON backups. The manager connects paired rows with a slim blue bracket while keeping each page's favicon and controls. The left pane is on top and the right pane is below. Removing one partner leaves the other as an ordinary saved tab.
 
 ### Restore tabs
 

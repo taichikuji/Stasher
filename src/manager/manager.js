@@ -1,14 +1,25 @@
 // Manager-page controller. Storage is the source of truth; this page redraws from
 // it after every mutation so other extension contexts stay in sync.
 
-// Only the panel in the requested window should answer; other managers stay silent.
-Promise.all([chrome.tabs.getCurrent(), chrome.windows.getCurrent()]).then(([tab, window]) => {
-  if (tab) return;
+// Keep one manager visible per window; only panels answer visibility checks.
+Promise.all([chrome.tabs.getCurrent(), chrome.windows.getCurrent()]).then(async ([tab, window]) => {
+  const hideSidePanel = () => chrome.sidePanel.close?.({ windowId: window.id }).catch(() => {});
+  if (tab) {
+    const hidePanelWhenVisible = () => {
+      if (document.visibilityState === 'visible') hideSidePanel();
+    };
+    document.addEventListener('visibilitychange', hidePanelWhenVisible);
+    hidePanelWhenVisible();
+    return;
+  }
   chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     if (message.type === 'is-side-panel-visible' && message.windowId === window.id) {
       sendResponse(document.visibilityState === 'visible');
     }
   });
+  // Opening a panel beside an already selected manager should keep the manager.
+  const [activeTab] = await chrome.tabs.query({ windowId: window.id, active: true });
+  if (activeTab?.url === chrome.runtime.getURL('src/manager/manager.html')) hideSidePanel();
 }).catch(error => console.error('Error identifying Stasher side panel:', error));
 
 // Constants and Configuration

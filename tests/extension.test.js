@@ -257,6 +257,7 @@ function createElement() {
 
 function runManager(initialItems, options = {}) {
   const documentListeners = {};
+  const closedPanels = [];
   const createdTabs = [];
   const createdWindows = [];
   const errors = [];
@@ -278,6 +279,7 @@ function runManager(initialItems, options = {}) {
       onMessage: (options.messaging ?? createMessaging()).onMessage
     },
     storage,
+    sidePanel: { close: async details => closedPanels.push(clone(details)) },
     windows: {
       getCurrent: async () => ({ id: options.windowId ?? 4 }),
       create: async details => {
@@ -295,6 +297,7 @@ function runManager(initialItems, options = {}) {
     },
     tabs: {
       getCurrent: async () => options.sidePanel ? undefined : { id: 1, windowId: options.windowId ?? 4 },
+      query: async () => clone(options.activeTabs ?? []),
       create: async details => {
         if (options.failTabCreation) throw new Error('Tab creation failed');
         const tab = { id: nextTabId++, ...clone(details) };
@@ -380,6 +383,7 @@ function runManager(initialItems, options = {}) {
 
   return {
     context,
+    closedPanels,
     createdTabs,
     createdWindows,
     errors,
@@ -508,6 +512,24 @@ test('only the matching side panel responds when multiple managers are open', as
     await background.listeners.actionClicked({ windowId: 4, groupId: -1 });
     assert.equal(background.createdTabs.length, visibilityState === 'visible' ? 0 : 1);
   }
+});
+
+test('the visible full manager hides its own panel, including when a panel is opened beside it', async () => {
+  const manager = runManager([], { windowId: 8, visibilityState: 'hidden' });
+  await new Promise(setImmediate);
+  assert.deepEqual(manager.closedPanels, []);
+  manager.context.document.visibilityState = 'visible';
+  manager.triggerDocumentEvent('visibilitychange');
+  assert.deepEqual(manager.closedPanels, [{ windowId: 8 }]);
+  manager.context.document.visibilityState = 'hidden';
+  manager.triggerDocumentEvent('visibilitychange');
+  assert.equal(manager.closedPanels.length, 1);
+
+  const panel = runManager([], { sidePanel: true, activeTabs: [{
+    url: 'chrome-extension://stasher/src/manager/manager.html'
+  }] });
+  await new Promise(setImmediate);
+  assert.deepEqual(panel.closedPanels, [{ windowId: 4 }]);
 });
 
 test('an existing dashboard is left alone with a visible panel and reused after it is hidden', async () => {

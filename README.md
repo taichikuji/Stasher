@@ -94,7 +94,7 @@ JSON imports keep existing saved stashes when IDs match and keep the first valid
 
 Press **Alt+A** (**Option+A** on macOS), or right-click **Stasher extension icon → Open side panel**, to open the same manager beside your page. **Alt+S** and the icon continue to stash tabs. Change shortcuts in `chrome://extensions/shortcuts`.
 
-While Stasher's side panel is visible in the current window, stashing updates it without opening or focusing a manager tab. When the panel is closed or hidden, stashing opens or focuses the manager as usual. A panel in another window does not change this behavior. If stashing closes every tab in the window, Stasher opens one New Tab first to keep the side panel available.
+While Stasher's side panel is visible in the current window, stashing updates it without opening or focusing a manager tab. When the panel is closed or hidden, stashing opens or focuses the manager as usual. A panel in another window does not change this behavior. If stashing closes every tab in the window, Stasher opens one New Tab first to keep the side panel available. When the full manager becomes visible, including when Chrome selects it after stashing the other tabs, the side panel hides instead. Opening the side panel beside an already selected manager also keeps the full manager view.
 
 Search highlights literal matches in stash and page titles and reuses the loaded archive while you type. Hover a saved page title to see its full URL. Matching stashes still show all their tabs.
 

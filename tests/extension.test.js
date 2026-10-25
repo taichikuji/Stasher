@@ -445,8 +445,32 @@ test('stashes a tab group through the Chromium extension API', async () => {
     windowId: 4,
     index: 0,
     pinned: true,
-    active: true
+    active: false
   }]);
+  assert.deepEqual(result.updatedTabs, [{ id: 100, active: true }]);
+});
+
+test('stashing selects the manager only after source tabs finish closing', async () => {
+  for (const existingManager of [false, true]) {
+    const tab = { id: 11, title: 'Page', url: 'https://example.com', windowId: 4, groupId: -1 };
+    const manager = { id: 15, windowId: 4, url: 'chrome-extension://stasher/src/manager/manager.html', pinned: true };
+    const background = runBackground({ looseTabs: [tab], windowTabs: [tab, ...(existingManager ? [manager] : [])] });
+    const gate = pauseNextCall(background.context.chrome.tabs, 'remove');
+    const pending = background.listeners.actionClicked(tab);
+    await gate.started;
+    try {
+      assert.equal(background.getItems().length, 1);
+      assert.deepEqual(background.removedTabs, []);
+      assert.equal(background.createdTabs.some(tab => tab.active), false);
+      assert.equal(background.updatedTabs.some(tab => tab.active), false);
+    } finally {
+      gate.release();
+      await pending;
+    }
+    assert.deepEqual(background.removedTabs, [11]);
+    assert.deepEqual(background.updatedTabs.at(-1), { id: existingManager ? 15 : 100, active: true });
+    assert.deepEqual(background.errors, []);
+  }
 });
 
 test('visible side panels receive group, loose-tab, and context-menu stashes without a dashboard', async () => {

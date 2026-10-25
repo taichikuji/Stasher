@@ -30,10 +30,10 @@ const openManager = async (windowId, active = true) => {
 
   if (managerTab) {
     // Pin the existing manager, selecting it for manual actions.
-    await chrome.tabs.update(managerTab.id, { ...(active ? { active: true } : {}), pinned: true });
+    return chrome.tabs.update(managerTab.id, { ...(active ? { active: true } : {}), pinned: true });
   } else {
     // If not found, create it pinned at index 0 (far left)
-    await chrome.tabs.create({
+    return chrome.tabs.create({
       url: MANAGER_URL,
       windowId,
       index: 0,
@@ -215,7 +215,7 @@ const handleStash = async (tab, singleTab = false) => {
       // Persist before closing any tabs so a storage failure cannot lose them.
       await saveToStorage(stashData);
     }
-    await openManager(currentWindowId);
+    const managerTab = await openManager(currentWindowId, !stashData);
     if (stashData) {
       const tabIds = tabsToStash.map(t => t.id);
       const windowTabs = await chrome.tabs.query({ windowId: currentWindowId });
@@ -224,6 +224,8 @@ const handleStash = async (tab, singleTab = false) => {
         await chrome.tabs.create({ windowId: currentWindowId });
       }
       await chrome.tabs.remove(tabIds);
+      // Closing a tab can move focus, especially after an unload confirmation.
+      if (managerTab) await chrome.tabs.update(managerTab.id, { active: true });
     }
 
   } catch (error) {

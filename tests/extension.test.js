@@ -27,6 +27,21 @@ function eventSlot(listeners, name) {
   };
 }
 
+function createMessaging() {
+  const listeners = new Set();
+  return {
+    onMessage: { addListener: listener => listeners.add(listener) },
+    async sendMessage(message) {
+      if (!listeners.size) throw new Error('Could not establish connection. Receiving end does not exist.');
+      for (const listener of listeners) {
+        let response;
+        listener(clone(message), {}, value => { response = value; });
+        if (response !== undefined) return response;
+      }
+    }
+  };
+}
+
 function createLocks() {
   const queues = new Map();
   return {
@@ -100,6 +115,7 @@ function runBackground(options = {}) {
   const api = {
     runtime: {
       getURL: path => `chrome-extension://stasher/${path}`,
+      sendMessage: (options.messaging ?? createMessaging()).sendMessage,
       onInstalled: eventSlot(listeners, 'installed'),
       onStartup: eventSlot(listeners, 'startup')
     },
@@ -137,12 +153,14 @@ function runBackground(options = {}) {
         if (query.groupId === -1) return clone(options.looseTabs ?? []);
         if (query.groupId !== undefined) return clone((options.groupedTabs ?? [])
           .filter(tab => tab.groupId === undefined || tab.groupId === query.groupId));
-        if (query.windowId !== undefined) return clone((options.windowTabs ?? []).filter(tab => tab.windowId === undefined || tab.windowId === query.windowId));
-        if (query.windowType) return clone((options.windowTabs ?? []).filter(tab =>
+        const windowTabs = [...(options.windowTabs ?? []), ...createdTabs].filter(tab => !removedTabs.includes(tab.id));
+        if (query.windowId !== undefined) return clone(windowTabs.filter(tab => tab.windowId === undefined || tab.windowId === query.windowId));
+        if (query.windowType) return clone(windowTabs.filter(tab =>
           windows.some(window => window.id === tab.windowId && window.type === query.windowType)));
-        return clone(options.windowTabs ?? []);
+        return clone(windowTabs);
       },
       create: async details => {
+        if (options.failTabCreation) throw new Error('Tab creation failed');
         const tab = { id: 100 + createdTabs.length, ...clone(details) };
         createdTabs.push(tab);
         return tab;
@@ -239,6 +257,7 @@ function createElement() {
 
 function runManager(initialItems, options = {}) {
   const documentListeners = {};
+  const closedPanels = [];
   const createdTabs = [];
   const createdWindows = [];
   const errors = [];
@@ -256,10 +275,13 @@ function runManager(initialItems, options = {}) {
 
   const api = {
     runtime: {
-      getURL: path => `chrome-extension://stasher/${path}`
+      getURL: path => `chrome-extension://stasher/${path}`,
+      onMessage: (options.messaging ?? createMessaging()).onMessage
     },
     storage,
+    sidePanel: { close: async details => closedPanels.push(clone(details)) },
     windows: {
+      getCurrent: async () => ({ id: options.windowId ?? 4 }),
       create: async details => {
         if (options.failWindowCreation) throw new Error('Window creation failed');
         const opened = (Array.isArray(details.url) ? details.url : [details.url]).map(url => ({ id: nextTabId++, url, windowId: 7 }));
@@ -274,6 +296,8 @@ function runManager(initialItems, options = {}) {
       contains: async () => options.groupPermissionGranted !== false
     },
     tabs: {
+      getCurrent: async () => options.sidePanel ? undefined : { id: 1, windowId: options.windowId ?? 4 },
+      query: async () => clone(options.activeTabs ?? []),
       create: async details => {
         if (options.failTabCreation) throw new Error('Tab creation failed');
         const tab = { id: nextTabId++, ...clone(details) };
@@ -315,6 +339,7 @@ function runManager(initialItems, options = {}) {
   if (options.splitViewSupported === false) delete api.tabs.createSplit;
 
   const document = {
+    visibilityState: options.visibilityState ?? 'visible',
     addEventListener(name, listener) {
       documentListeners[name] = listener;
     },
@@ -358,6 +383,7 @@ function runManager(initialItems, options = {}) {
 
   return {
     context,
+    closedPanels,
     createdTabs,
     createdWindows,
     errors,
@@ -421,6 +447,149 @@ test('stashes a tab group through the Chromium extension API', async () => {
     pinned: true,
     active: true
   }]);
+});
+
+test('visible side panels receive group, loose-tab, and context-menu stashes without a dashboard', async () => {
+  for (const action of ['group', 'loose', 'single']) {
+    const messaging = createMessaging();
+    const storage = createStorage({ stashedItems: [] });
+    const panel = runManager([], { sidePanel: true, messaging, storage });
+    await new Promise(setImmediate);
+    const tab = { id: 11, title: 'Page', url: 'https://example.com', windowId: 4, groupId: action === 'group' ? 7 : -1 };
+    const survivor = { id: 12, windowId: 4, url: 'https://stay.example', pinned: true };
+    const background = runBackground({ messaging, storage, groupedTabs: [tab], looseTabs: [tab], windowTabs: [tab, survivor] });
+
+    if (action === 'single') await background.listeners.contextMenuClicked({ menuItemId: 'stash-tab' }, tab);
+    else await background.listeners.actionClicked(tab);
+    await new Promise(setImmediate);
+
+    assert.equal(background.getItems().length, 1);
+    assert.deepEqual(background.removedTabs, [11]);
+    assert.deepEqual(background.createdTabs, []);
+    assert.deepEqual(background.updatedTabs, []);
+    assert.equal(panel.getElement('stash-container').children.length, 1);
+    assert.equal(panel.getElement('stash-container').children[0].className, 'stash-card');
+    assert.deepEqual(background.errors, []);
+    assert.deepEqual(panel.errors, []);
+  }
+});
+
+test('closing or hiding the side panel restores dashboard opening without restarting the worker', async () => {
+  const messaging = createMessaging();
+  const panel = runManager([], { sidePanel: true, messaging });
+  await new Promise(setImmediate);
+  const background = runBackground({ messaging });
+  await background.listeners.actionClicked({ windowId: 4, groupId: -1 });
+  assert.deepEqual(background.createdTabs, []);
+
+  panel.context.document.visibilityState = 'hidden';
+  await background.listeners.actionClicked({ windowId: 4, groupId: -1 });
+  assert.equal(background.createdTabs.length, 1);
+  assert.equal(background.createdTabs[0].active, true);
+  assert.equal(background.createdTabs[0].pinned, true);
+});
+
+test('dashboard tabs and side panels in other windows cannot suppress the current dashboard', async () => {
+  for (const sidePanel of [false, true]) {
+    const messaging = createMessaging();
+    runManager([], { messaging, sidePanel, windowId: sidePanel ? 8 : 4 });
+    await new Promise(setImmediate);
+    const background = runBackground({ messaging });
+    await background.listeners.actionClicked({ windowId: 4, groupId: -1 });
+    assert.equal(background.createdTabs.length, 1);
+    assert.equal(background.createdTabs[0].windowId, 4);
+  }
+});
+
+test('only the matching side panel responds when multiple managers are open', async () => {
+  for (const visibilityState of ['visible', 'hidden']) {
+    const messaging = createMessaging();
+    runManager([], { messaging });
+    runManager([], { messaging, sidePanel: true, windowId: 8 });
+    runManager([], { messaging, sidePanel: true, visibilityState });
+    await new Promise(setImmediate);
+    const background = runBackground({ messaging });
+    await background.listeners.actionClicked({ windowId: 4, groupId: -1 });
+    assert.equal(background.createdTabs.length, visibilityState === 'visible' ? 0 : 1);
+  }
+});
+
+test('the visible full manager hides its own panel, including when a panel is opened beside it', async () => {
+  const manager = runManager([], { windowId: 8, visibilityState: 'hidden' });
+  await new Promise(setImmediate);
+  assert.deepEqual(manager.closedPanels, []);
+  manager.context.document.visibilityState = 'visible';
+  manager.triggerDocumentEvent('visibilitychange');
+  assert.deepEqual(manager.closedPanels, [{ windowId: 8 }]);
+  manager.context.document.visibilityState = 'hidden';
+  manager.triggerDocumentEvent('visibilitychange');
+  assert.equal(manager.closedPanels.length, 1);
+
+  const panel = runManager([], { sidePanel: true, activeTabs: [{
+    url: 'chrome-extension://stasher/src/manager/manager.html'
+  }] });
+  await new Promise(setImmediate);
+  assert.deepEqual(panel.closedPanels, [{ windowId: 4 }]);
+});
+
+test('an existing dashboard is left alone with a visible panel and reused after it is hidden', async () => {
+  const messaging = createMessaging();
+  const panel = runManager([], { messaging, sidePanel: true });
+  await new Promise(setImmediate);
+  const background = runBackground({ messaging, windowTabs: [{
+    id: 15, windowId: 4, pendingUrl: 'chrome-extension://stasher/src/manager/manager.html'
+  }] });
+  await background.listeners.actionClicked({ windowId: 4, groupId: -1 });
+  assert.deepEqual(background.createdTabs, []);
+  assert.deepEqual(background.updatedTabs, []);
+
+  panel.context.document.visibilityState = 'hidden';
+  await background.listeners.actionClicked({ windowId: 4, groupId: -1 });
+  assert.deepEqual(background.createdTabs, []);
+  assert.deepEqual(background.updatedTabs, [{ id: 15, active: true, pinned: true }]);
+});
+
+test('stashing every tab keeps a New Tab open before removing the saved tabs', async () => {
+  for (const count of [1, 2]) {
+    const messaging = createMessaging();
+    runManager([], { messaging, sidePanel: true });
+    await new Promise(setImmediate);
+    const tabs = Array.from({ length: count }, (_, index) => ({
+      id: 11 + index, title: 'Page', url: `https://example.com/${index}`, windowId: 4, groupId: -1
+    }));
+    const background = runBackground({ messaging, looseTabs: tabs, windowTabs: tabs });
+    const remove = background.context.chrome.tabs.remove;
+    background.context.chrome.tabs.remove = async ids => {
+      assert.deepEqual(background.createdTabs, [{ id: 100, windowId: 4 }]);
+      assert.equal(background.getItems()[0].tabs.length, count);
+      await remove(ids);
+    };
+    await background.listeners.actionClicked(tabs[0]);
+    assert.deepEqual(background.removedTabs, tabs.map(tab => tab.id));
+    assert.deepEqual(background.errors, []);
+  }
+});
+
+test('a failed New Tab creation keeps saved source tabs open', async () => {
+  const messaging = createMessaging();
+  runManager([], { messaging, sidePanel: true });
+  await new Promise(setImmediate);
+  const tab = { id: 11, title: 'Page', url: 'https://example.com', windowId: 4, groupId: -1 };
+  const background = runBackground({ messaging, looseTabs: [tab], windowTabs: [tab], failTabCreation: true });
+  await background.listeners.actionClicked(tab);
+  assert.equal(background.getItems().length, 1);
+  assert.deepEqual(background.removedTabs, []);
+  assert.deepEqual(background.createdTabs, []);
+  assert.equal(background.errors.length, 1);
+});
+
+test('a missing or failed visibility responder preserves normal dashboard behavior', async () => {
+  for (const messaging of [undefined, { sendMessage: async () => { throw new Error('Panel closed'); } }]) {
+    const background = runBackground({ messaging });
+    await background.listeners.actionClicked({ windowId: 4, groupId: -1 });
+    assert.equal(background.createdTabs.length, 1);
+    assert.deepEqual(background.errors, []);
+  }
 });
 
 const backupStash = {
@@ -721,14 +890,19 @@ function pauseNextCall(target, method) {
 
 test('failed stash reads and writes keep every selected tab open and preserve saved data', async () => {
   for (const failure of [{ failStorageGetKey: 'skipDuplicates' }, { failStorageGetKey: 'stashedItems' }, { failStorageSetAt: 1 }]) {
-    const background = runBackground({ ...failure, items: [savedStash], preferences: { skipDuplicates: true }, looseTabs: [
-      { id: 11, ...savedStash.tabs[0] }, { id: 12, title: 'New', url: 'https://new.example' }
-    ] });
-    await background.listeners.actionClicked({ windowId: 4, groupId: -1 });
-    assert.deepEqual(background.getItems(), [savedStash]);
-    assert.deepEqual(background.removedTabs, []);
-    assert.equal(background.createdTabs.length, 1);
-    assert.equal(background.errors.length, 1);
+    for (const sidePanel of [false, true]) {
+      const messaging = createMessaging();
+      if (sidePanel) runManager([], { messaging, sidePanel });
+      await new Promise(setImmediate);
+      const background = runBackground({ ...failure, messaging, items: [savedStash], preferences: { skipDuplicates: true }, looseTabs: [
+        { id: 11, ...savedStash.tabs[0] }, { id: 12, title: 'New', url: 'https://new.example' }
+      ] });
+      await background.listeners.actionClicked({ windowId: 4, groupId: -1 });
+      assert.deepEqual(background.getItems(), [savedStash]);
+      assert.deepEqual(background.removedTabs, []);
+      assert.equal(background.createdTabs.length, sidePanel ? 0 : 1);
+      assert.equal(background.errors.length, 1);
+    }
   }
 });
 

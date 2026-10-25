@@ -17,11 +17,13 @@ const MANAGER_URL = chrome.runtime.getURL(CONFIG.MANAGER_PATH);
 const UNGROUPED_ID = -1;
 
 /**
- * Opens or focuses the Stasher manager tab.
+ * Opens or focuses the manager tab unless its side panel is visible.
  * @param {number} windowId - The ID of the window to open the manager in.
  * @param {boolean} active - Whether to select the manager tab.
  */
 const openManager = async (windowId, active = true) => {
+  if (await chrome.runtime.sendMessage({ type: 'is-side-panel-visible', windowId }).catch(() => false)) return;
+
   // Check if manager is already open in this window
   const tabs = await chrome.tabs.query({ windowId });
   const managerTab = tabs.find(t => t.url === MANAGER_URL || t.pendingUrl === MANAGER_URL);
@@ -214,7 +216,15 @@ const handleStash = async (tab, singleTab = false) => {
       await saveToStorage(stashData);
     }
     await openManager(currentWindowId);
-    if (stashData) await chrome.tabs.remove(tabsToStash.map(t => t.id));
+    if (stashData) {
+      const tabIds = tabsToStash.map(t => t.id);
+      const windowTabs = await chrome.tabs.query({ windowId: currentWindowId });
+      // Keep the window and its side panel alive when stashing every tab.
+      if (windowTabs.every(t => tabIds.includes(t.id))) {
+        await chrome.tabs.create({ windowId: currentWindowId });
+      }
+      await chrome.tabs.remove(tabIds);
+    }
 
   } catch (error) {
     console.error("Critical error in handleStash:", error);

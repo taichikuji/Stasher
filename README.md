@@ -29,7 +29,7 @@ Right-click a tab and choose **Stash this tab**, or click the Stasher icon / pre
 ```mermaid
 flowchart TD
   accTitle: How Stasher saves tabs
-  accDescr: Stash one chosen tab, explicitly selected tabs, the active tab's group, or loose tabs. A split view's automatically highlighted panes follow the group or loose-tabs behavior. Filter excluded tabs and optionally skip duplicate URLs, save new tabs locally, open the manager, and close eligible tabs including skipped duplicates. If none are eligible, only open the manager.
+  accDescr: Stash one chosen tab, explicitly selected tabs, the active tab's group, or loose tabs. A split view's automatically highlighted panes follow the group or loose-tabs behavior. Filter excluded tabs and optionally skip duplicate URLs, save new tabs locally, use the visible side panel or open the manager, and close eligible tabs including skipped duplicates. If none are eligible, only show the manager.
   Start(["Start stashing"]) --> Single{"Stash this tab?"}
   Single -->|Yes| Chosen["Choose that tab"]
   Single -->|No| Selected{"Explicit multi-tab selection?"}
@@ -42,20 +42,20 @@ flowchart TD
   GroupTabs --> Filter
   Loose --> Filter
   Filter --> Eligible{"Any eligible tabs?"}
-  Eligible -->|No| ManagerOnly["Open or focus manager; leave tabs open"]
+  Eligible -->|No| ManagerOnly["Use visible side panel or open manager; leave tabs open"]
   Eligible -->|Yes| Duplicates{"Skip duplicate tabs enabled?"}
   Duplicates -->|No| Save["Save tabs locally"]
   Duplicates -->|Yes| Unique["Skip URLs already saved or repeated in this action"]
   Unique --> New{"Any new URLs?"}
   New -->|Yes| Save
   New -->|No| Manager
-  Save --> Manager["Open or focus manager"]
+  Save --> Manager["Use visible side panel or open manager"]
   Manager --> Close["Close eligible tabs, including skipped duplicates"]
 ```
 
 Stasher accepts `http:`, `https:`, and `chrome-extension:` URLs. It skips its own manager, new-tab and blank pages, invalid URLs, and other URL schemes. Pinned tabs stay open unless you explicitly right-click one and choose **Stash this tab**. Tabs are saved before they are closed; if reading or saving fails, they stay open.
 
-Enable **Skip duplicate tabs when stashing** to keep one saved copy of each exact URL across all stashes and within each new stashing action. The first occurrence is kept; different queries, fragments, protocols, or paths count as distinct URLs. Skipped browser tabs still close because their URLs are already saved. If every tab is duplicated, Stasher opens the manager without creating an empty stash or writing storage. Existing duplicates, imported backups, and saved titles are left intact. This works independently of **Keep tabs after restoration** and prevents retained tabs from being saved again after restoration.
+Enable **Skip duplicate tabs when stashing** to keep one saved copy of each exact URL across all stashes and within each new stashing action. The first occurrence is kept; different queries, fragments, protocols, or paths count as distinct URLs. Skipped browser tabs still close because their URLs are already saved. If every tab is duplicated, Stasher uses the visible side panel or opens the manager without creating an empty stash or writing storage. Existing duplicates, imported backups, and saved titles are left intact. This works independently of **Keep tabs after restoration** and prevents retained tabs from being saved again after restoration.
 
 Tab-group access is optional and is requested when you use the icon or shortcut. With access, Stasher saves the group name and color when the eligible tabs all belong to one group. A selection spanning groups or including loose tabs is saved as a loose stash. Right-clicking a single tab also saves it as a loose stash. If access is declined, tabs are still saved without group metadata; the next icon or shortcut use requests access again.
 
@@ -93,6 +93,8 @@ In the manager, search stash names, tab titles, and URLs, rename stashes, change
 JSON imports keep existing saved stashes when IDs match and keep the first valid entry for repeated IDs in a backup. The result reports how many stashes were added and how many invalid entries or existing/duplicate IDs were skipped.
 
 Press **Alt+A** (**Option+A** on macOS), or right-click **Stasher extension icon → Open side panel**, to open the same manager beside your page. **Alt+S** and the icon continue to stash tabs. Change shortcuts in `chrome://extensions/shortcuts`.
+
+While Stasher's side panel is visible in the current window, stashing updates it without opening or focusing a manager tab. When the panel is closed or hidden, stashing opens or focuses the manager as usual. A panel in another window does not change this behavior. If stashing closes every tab in the window, Stasher opens one New Tab first to keep the side panel available.
 
 Search highlights literal matches in stash and page titles and reuses the loaded archive while you type. Hover a saved page title to see its full URL. Matching stashes still show all their tabs.
 

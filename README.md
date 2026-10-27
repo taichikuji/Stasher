@@ -12,6 +12,12 @@ Stasher is a small, simple, and straightforward way to manage your tabs. Save ta
 
 You can view, edit, search, restore, and clean up your saved tabs from Stasher's manager. It respects your space and time, and stays out of your way when you do not need it.
 
+<p align="center">
+  <a href="https://chromewebstore.google.com/detail/stasher/feepkkcjmhhlmbghklpakdijphnlfjok">
+    <img src="https://developer.chrome.com/static/docs/webstore/branding/image/iNEddTyWiMfLSwFD6qGq.png" alt="Available in the Chrome Web Store" width="206">
+  </a>
+</p>
+
 ## Preview
 
 <p align="center">
@@ -121,10 +127,6 @@ Open **More actions → Settings**. Changes save automatically on this device an
 Startup opening reuses an existing manager or opens one pinned in the background in a normal window, preserving your selected tab. It does not stash tabs. Keeping tabs applies only to whole-stash restoration; individual saved links keep their usual behavior. Settings are not included in stash exports.
 
 Stasher opens on demand by default, with search inside the manager and light/dark themes that follow your browser configuration. It is simple on purpose. It's your mess. You deal with it.
-
-## Installation
-
-Install Stasher from the [Chrome Web Store](https://chromewebstore.google.com/detail/stasher/feepkkcjmhhlmbghklpakdijphnlfjok).
 
 ## A small note about Firefox
 
